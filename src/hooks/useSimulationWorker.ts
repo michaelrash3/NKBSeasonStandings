@@ -208,7 +208,8 @@ export function useSimulationTrend(input: TrendInput, debounceMs = 250) {
             input.settings
           );
           input.teamIds.forEach((tid) => {
-            result[tid].push(odds[tid] ?? 0);
+            const series = result[tid];
+            if (series) series.push(odds[tid] ?? 0);
           });
         });
         if (latestIdRef.current === id) setTrend(result);

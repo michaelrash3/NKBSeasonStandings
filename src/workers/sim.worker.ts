@@ -76,7 +76,8 @@ ctx.onmessage = (event: MessageEvent<WorkerRequest>) => {
         req.settings
       );
       req.teamIds.forEach((id) => {
-        trend[id].push(odds[id] ?? 0);
+        const series = trend[id];
+        if (series) series.push(odds[id] ?? 0);
       });
     });
     const response: TrendResponse = { kind: "trend", id: req.id, trend };

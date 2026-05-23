@@ -3,7 +3,8 @@ import { DEFAULT_SEASON_YEAR } from "./types";
 
 export const toMMDD = (date: Date) => `${date.getMonth() + 1}/${date.getDate()}`;
 
-const MONTH_TOKEN_RE = /[a-zA-Z]{3}/;
+const MONTH_TOKEN_RE =
+  /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)\b/i;
 
 export const normalizeDateInput = (value: string) => {
   const trimmed = value?.trim();

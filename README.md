@@ -1,0 +1,86 @@
+# NKB Season Tracker
+
+Single-page web app that tracks team standings, projections, and Gold Bracket odds for the NKB season. All data lives in the browser via `localStorage` — no backend.
+
+## Stack
+
+- Vite 5 + React 18 + TypeScript 5
+- Tailwind CSS 3
+- Web Worker for Monte Carlo simulation (off the main thread)
+- Vitest for unit tests on pure helpers
+- ESLint (`@typescript-eslint`, `react`, `react-hooks`, `jsx-a11y`) + Prettier
+
+## Commands
+
+```sh
+npm install
+npm run dev        # http://localhost:5173
+npm run build      # type-check + production bundle to dist/
+npm run preview    # serve the production bundle
+npm test           # vitest in watch mode
+npm test -- --run  # one-shot for CI
+npm run typecheck  # tsc -b without emit
+npm run lint       # ESLint over src/
+npm run format     # Prettier over src/
+```
+
+Node `>=20`; the repo pins to `.nvmrc`.
+
+## Architecture
+
+```
+src/
+  App.tsx                  # main component + view partials (Standings/Games/Model/Settings)
+  main.tsx                 # React root
+  index.css                # Tailwind directives
+  lib/
+    types.ts               # shared types + defaults (DEFAULT_SETTINGS, MODEL_AGGRESSION)
+    util.ts                # clamp, parseNumber, isFinal, blankLog
+    format.ts              # displayName, teamAbbr, recordText, buildTeamFormats
+    date.ts                # normalizeDateInput, parseDateValue, formatGameDate(Long)
+    csv.ts                 # parseCSVLine, csvEscape (formula-injection guard), stripBom
+    sim.ts                 # calculateTeams, predictGame, applyResult, projectStandings,
+                           # rankTeams, simulateGoldOdds, standingsPoints, getMathGoldStatus
+    storage.ts             # versioned localStorage loaders/writers w/ schema guards
+  hooks/
+    useSimulationWorker.ts # debounced odds + trend hooks, inline fallback when Worker unavailable
+    useToast.ts            # tiny toast hook (info/success/error/undo)
+  workers/
+    sim.worker.ts          # Monte Carlo worker, posts odds + trend results
+  components/Toast.tsx     # toast renderer
+  styles/tokens.ts         # pill/card/tab/button class helpers
+```
+
+## Settings (all wired into the model)
+
+| Setting              | Effect                                                                                  |
+| -------------------- | --------------------------------------------------------------------------------------- |
+| Season label         | Displayed in header + filename for CSV/JSON exports                                     |
+| Gold cutoff          | Top-N teams qualify for Gold Bracket; drives all "in / out" math                         |
+| Win / Tie points     | Used in `standingsPoints`, max-points math, clinch/elimination calculations             |
+| Run-diff tiebreaker  | When off, ranking falls straight from win% to TPI                                       |
+| Max score cap        | Clamp applied inside `predictGame` before rounding                                      |
+| Model aggression     | Scales the TPI and momentum weights in `predictGame` (Conservative 0.6× / Balanced 1.0× / Aggressive 1.4×) |
+
+## Data + persistence
+
+- `league_teams_v1`, `league_matchups_v1`, `league_logs_v1`, `league_settings_v1` — versioned localStorage keys with schema validation on read and quota handling on write.
+- `league_undo_snapshot_v1` — last destructive-action snapshot powering the in-app Undo toast (reset, CSV import, delete game).
+- First load migrates the older unsuffixed `league_*` keys, then removes them.
+- CSV import/export uses a 13-column schedule format (Game ID, Date, Away/Home Team + Innings + R/H/K + BIP). Imports strip BOM and the spreadsheet formula-injection prefix; exports re-add the guard.
+
+## Performance notes
+
+- `simulateGoldOdds` and the trend states run in `src/workers/sim.worker.ts` via `useSimulationOdds` / `useSimulationTrend`. Both hooks debounce (200–250 ms), cancel in-flight runs when inputs change, and fall back to inline sim when `Worker` is unavailable (tests, SSR).
+- All `.find` lookups in render loops were replaced with `Map<string, T>` built once per `useMemo`. Per-team scenario seeds, control-level, and game-impact computations are memoized into `Map`s.
+
+## Accessibility
+
+- `TeamDrawer` is `role="dialog" aria-modal="true"` with focus trap, Escape to close, body scroll lock, and focus restore on close.
+- Header tabs use `role="tablist"` / `role="tab"` with left/right arrow-key navigation and `aria-controls`.
+- Every input has a programmatic label (`<label htmlFor>` or `aria-label`). Score inputs are `inputMode="numeric"` with `maxLength={2}`.
+- Standings rows are keyboard-activatable (Enter / Space).
+
+## Deploy
+
+Vercel infers Vite via `vercel.json`. CI (`.github/workflows/ci.yml`) runs `lint → typecheck → test → build` on push and PR.

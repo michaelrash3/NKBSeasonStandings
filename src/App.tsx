@@ -24,12 +24,7 @@ import {
   normalizeDateInput,
   parseDateValue,
 } from "./lib/date";
-import {
-  buildTeamFormats,
-  displayName,
-  recordText,
-  teamAbbr,
-} from "./lib/format";
+import { displayName, recordText, teamAbbr } from "./lib/format";
 import {
   applyResult,
   calculateTeams,
@@ -124,7 +119,7 @@ const describePrediction = (
   const awayName = displayName(away?.name || game.away);
   const homeName = displayName(home?.name || game.home);
   const winnerName = displayName(winner?.name || prediction.winnerId);
-  const _loserName = displayName(loser?.name || loserId);
+  void loser;
 
   if (!away || !home) {
     return `Model leans ${winnerName}, but one or both teams are missing from the imported team list.`;
@@ -183,7 +178,8 @@ const Sparkline = React.memo(function Sparkline({ values }: { values: number[] }
   if (!values.length) return <span className="text-slate-500">—</span>;
   const width = 108;
   const height = 30;
-  const data = values.length === 1 ? [values[0], values[0]] : values;
+  const seed = values[0] ?? 0;
+  const data = values.length === 1 ? [seed, seed] : values;
   const points = data
     .map((value, index) => {
       const x = (index / Math.max(data.length - 1, 1)) * width;
@@ -192,7 +188,7 @@ const Sparkline = React.memo(function Sparkline({ values }: { values: number[] }
     })
     .join(" ");
 
-  const last = data[data.length - 1];
+  const last = data[data.length - 1] ?? 0;
   const tone =
     last >= 75 ? "stroke-emerald-500" : last >= 40 ? "stroke-blue-500" : "stroke-slate-500";
 
@@ -384,6 +380,7 @@ function useFocusTrap(open: boolean, ref: React.RefObject<HTMLElement>) {
       if (!items.length) return;
       const firstItem = items[0];
       const lastItem = items[items.length - 1];
+      if (!firstItem || !lastItem) return;
       if (event.shiftKey && document.activeElement === firstItem) {
         event.preventDefault();
         lastItem.focus();
@@ -446,6 +443,8 @@ function TeamDrawer({
       onClick={onClose}
       role="presentation"
     >
+      {/* Stop click + keydown propagation so the backdrop's onClose doesn't fire from inside the dialog. */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events */}
       <aside
         ref={ref}
         role="dialog"
@@ -454,6 +453,7 @@ function TeamDrawer({
         tabIndex={-1}
         className="h-full w-full max-w-md overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl outline-none"
         onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -657,7 +657,6 @@ export default function App() {
     liveTeams.forEach((team) => map.set(team.id, team));
     return map;
   }, [liveTeams]);
-  const teamFormats = useMemo(() => buildTeamFormats(liveTeams), [liveTeams]);
   const teamBaseById = useMemo(() => {
     const map = new Map<string, TeamBase>();
     teams.forEach((team) => map.set(team.id, team));
@@ -729,7 +728,8 @@ export default function App() {
       const allowed = new Set(states.slice(0, limitIndex).map((g) => g.id));
       const stateLogs: Record<string, GameLog> = {};
       matchups.forEach((game) => {
-        if (allowed.has(game.id) && logs[game.id]) stateLogs[game.id] = logs[game.id];
+        const log = logs[game.id];
+        if (allowed.has(game.id) && log) stateLogs[game.id] = log;
       });
       return stateLogs;
     };
@@ -1394,7 +1394,7 @@ export default function App() {
   };
 
   const latestCompletedDate = completedGames.length
-    ? formatGameDate(completedGames[completedGames.length - 1].date)
+    ? formatGameDate(completedGames[completedGames.length - 1]?.date ?? "")
     : "No finals yet";
 
   // ---------- Game forecasts ----------
@@ -1538,7 +1538,7 @@ export default function App() {
         const lines = text.split(/\r?\n/).filter((line) => line.trim());
         if (lines.length < 2) throw new Error("CSV has no rows");
 
-        const headers = parseCSVLine(lines[0]).map(normalizeHeader);
+        const headers = parseCSVLine(lines[0] ?? "").map(normalizeHeader);
         const index = (name: string) => headers.indexOf(normalizeHeader(name));
 
         const gameIdIndex = index("Game ID");
@@ -1896,6 +1896,7 @@ export default function App() {
       for (let homeIndex = awayIndex + 1; homeIndex < builtTeams.length; homeIndex += 1) {
         const away = builtTeams[awayIndex];
         const home = builtTeams[homeIndex];
+        if (!away || !home) continue;
         const gameNumber = builtMatchups.length + 1;
         const id = `game_${String(gameNumber).padStart(3, "0")}_${away.id}_${home.id}`;
         builtMatchups.push({ id, date: "", away: away.id, home: home.id });
@@ -1981,6 +1982,7 @@ export default function App() {
         ? (idx + 1) % VIEW_ORDER.length
         : (idx - 1 + VIEW_ORDER.length) % VIEW_ORDER.length;
     const nextView = VIEW_ORDER[nextIdx];
+    if (!nextView) return;
     setActiveView(nextView);
     tabRefs.current[nextView]?.focus();
   };
@@ -2389,6 +2391,7 @@ function StandingsView({
                       {index === goldCutoff && (
                         <tr
                           key="cut-line"
+                          // eslint-disable-next-line jsx-a11y/no-interactive-element-to-noninteractive-role
                           role="separator"
                           aria-label={`Gold cut line: top ${goldCutoff} teams qualify`}
                         >

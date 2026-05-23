@@ -164,7 +164,7 @@ export const calculateTeams = (
     .sort((a, b) => parseDateValue(a.date) - parseDateValue(b.date))
     .forEach((game) => {
       const log = logs[game.id];
-      if (!isFinal(log)) return;
+      if (!log || !isFinal(log)) return;
 
       const away = byId.get(game.away);
       const home = byId.get(game.home);
@@ -235,7 +235,7 @@ export const calculateTeams = (
 
   matchups.forEach((game) => {
     const log = logs[game.id];
-    if (!isFinal(log)) return;
+    if (!log || !isFinal(log)) return;
     const away = byId.get(game.away);
     const home = byId.get(game.home);
     if (!away || !home) return;
