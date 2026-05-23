@@ -4,6 +4,9 @@ dist-ssr
 *.local
 .vite
 *.tsbuildinfo
+.env*.local
+coverage
+.cache
 
 # Logs
 *.log
