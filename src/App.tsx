@@ -1,5 +1,4 @@
 import React, {
-  startTransition,
   useCallback,
   useEffect,
   useId,
@@ -603,7 +602,6 @@ export default function App() {
   const [newHome, setNewHome] = useState("");
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [compareTeamId, setCompareTeamId] = useState<string | null>(null);
-  const [drawerHeavyReady, setDrawerHeavyReady] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -2099,78 +2097,36 @@ export default function App() {
   const compareTeam = compareTeamId ? dashboardById.get(compareTeamId) ?? null : null;
   const currentLeader = dashboardRows[0];
 
-  useEffect(() => {
-    if (!selectedTeamId) {
-      setDrawerHeavyReady(false);
-      return;
-    }
-    setDrawerHeavyReady(false);
-    const id = window.requestAnimationFrame(() => {
-      startTransition(() => setDrawerHeavyReady(true));
-    });
-    return () => window.cancelAnimationFrame(id);
-  }, [selectedTeamId]);
-
-  const [selectedTeamDetail, setSelectedTeamDetail] = useState<any | null>(null);
-
-  useEffect(() => {
-    if (!selectedTeam || !drawerHeavyReady) {
-      setSelectedTeamDetail(null);
-      return;
-    }
-
-    let cancelled = false;
-    const baseDetail = {
+  const selectedTeamDetail = useMemo(() => {
+    if (!selectedTeam) return null;
+    const swings = nextTwoSwingGames(selectedTeam.id);
+    return {
       bubble: bubbleTierForTeam(selectedTeam),
       currentSosRank: currentSosRanks[selectedTeam.id] ?? null,
       goldPctLabel: formatGoldPct(selectedTeam),
+      range: seedRangeForTeam(selectedTeam.id),
+      sos: scheduleDifficultyForTeam(selectedTeam.id),
+      swings,
+      titleRace: titleRaceBadgeForTeam(selectedTeam),
+      clinchScenarios: clinchScenariosForTeam(selectedTeam.id),
+      magic: magicForGold(selectedTeam.id, dashboardRows, remainingGames, goldCutoff, settings),
+      elimination: eliminationNumberForGold(selectedTeam.id, dashboardRows, remainingGames, goldCutoff, settings),
+      path: pathSummary(
+        { ...selectedTeam, rank: selectedTeam.rank ?? 99 },
+        goldCutoff,
+        swings.map((swing) => ({
+          opponentName: swing.opponentName,
+          teamIsAway: swing.teamIsAway,
+          winSeed: swing.winSeed,
+          lossSeed: swing.lossSeed,
+        })),
+        {
+          totalTeams: dashboardRows.length,
+          leaderName: currentLeader ? displayName(currentLeader.name) : "",
+        }
+      ),
     };
-    setSelectedTeamDetail(baseDetail);
-
-    const stageOne = window.setTimeout(() => {
-      if (cancelled) return;
-      const swings = nextTwoSwingGames(selectedTeam.id);
-      setSelectedTeamDetail((prev: any) => ({
-        ...prev,
-        range: seedRangeForTeam(selectedTeam.id),
-        sos: scheduleDifficultyForTeam(selectedTeam.id),
-        swings,
-        titleRace: titleRaceBadgeForTeam(selectedTeam),
-      }));
-
-      const stageTwo = window.setTimeout(() => {
-        if (cancelled) return;
-        const swingsNow = nextTwoSwingGames(selectedTeam.id);
-        setSelectedTeamDetail((prev: any) => ({
-          ...prev,
-          clinchScenarios: clinchScenariosForTeam(selectedTeam.id),
-          magic: magicForGold(selectedTeam.id, dashboardRows, remainingGames, goldCutoff, settings),
-          elimination: eliminationNumberForGold(selectedTeam.id, dashboardRows, remainingGames, goldCutoff, settings),
-          path: pathSummary(
-            { ...selectedTeam, rank: selectedTeam.rank ?? 99 },
-            goldCutoff,
-            swingsNow.map((swing) => ({
-              opponentName: swing.opponentName,
-              teamIsAway: swing.teamIsAway,
-              winSeed: swing.winSeed,
-              lossSeed: swing.lossSeed,
-            })),
-            {
-              totalTeams: dashboardRows.length,
-              leaderName: currentLeader ? displayName(currentLeader.name) : "",
-            }
-          ),
-        }));
-      }, 0);
-
-      return () => window.clearTimeout(stageTwo);
-    }, 0);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(stageOne);
-    };
-  }, [selectedTeam, drawerHeavyReady, bubbleTierForTeam, currentSosRanks, nextTwoSwingGames, seedRangeForTeam, scheduleDifficultyForTeam, titleRaceBadgeForTeam, clinchScenariosForTeam, dashboardRows, remainingGames, goldCutoff, settings, currentLeader]);
+  }, [selectedTeam, nextTwoSwingGames, bubbleTierForTeam, currentSosRanks, formatGoldPct, seedRangeForTeam, scheduleDifficultyForTeam, titleRaceBadgeForTeam, clinchScenariosForTeam, dashboardRows, remainingGames, goldCutoff, settings, currentLeader]);
 
   const finalCount = completedGames.length;
   const totalGamesCount = matchups.length;
