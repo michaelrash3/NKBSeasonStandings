@@ -32,10 +32,10 @@ export const pathSummary = (
   const goldPct = Math.round(team.goldPct);
 
   if (team.goldStatus === "Clinched") {
-    return `${name} have clinched a Gold Bracket spot at #${seed} and are now playing for seeding.`;
+    return `${name} have clinched a Gold Bracket ticket at #${seed}; now it's all about sharpening their blade for seeding battles.`;
   }
   if (team.goldStatus === "Eliminated") {
-    return `${name} are mathematically eliminated from the Gold Bracket; their remaining games only affect other teams' paths.`;
+    return `${name} are mathematically eliminated from the Gold race, but they still get to play spoiler and reshape everyone else's path.`;
   }
 
   const insideNow = seed <= cutoff;
@@ -46,18 +46,18 @@ export const pathSummary = (
     .join(" and ");
 
   if (insideNow && insideProjected) {
-    return `${name} sit at #${seed} with the model projecting #${projected} and ${goldPct}% Gold odds — inside the cut line on both fronts. The next two matter: ${swingLine}.`;
+    return `${name} are holding firm at #${seed} with a projection of #${projected} and ${goldPct}% Gold odds — safely above the line for now. Next two pressure points: ${swingLine}.`;
   }
   if (insideNow && !insideProjected) {
-    return `${name} currently hold #${seed} but project to slip to #${projected} as the remaining schedule plays out (${goldPct}% Gold). ${swingLine ? "They need to protect the cushion in their next two: " + swingLine + "." : "Every remaining loss matters."}`;
+    return `${name} currently own #${seed}, but the model sees a slide to #${projected} as the stretch run unfolds (${goldPct}% Gold). ${swingLine ? "They need to defend that cushion immediately: " + swingLine + "." : "Every remaining loss is gasoline on the fire."}`;
   }
   if (!insideNow && insideProjected) {
-    return `${name} sit at #${seed} now but project to climb to #${projected} (${goldPct}% Gold). The path is open if the next two break right: ${swingLine}.`;
+    return `${name} are sitting at #${seed} today but are projected to rise to #${projected} (${goldPct}% Gold). The door is cracked open if these next two tilt their way: ${swingLine}.`;
   }
   if (goldPct >= 15) {
-    return `${name} are at #${seed} and project to #${projected} — outside the cut line but at ${goldPct}% odds, still in the chase.${context.leaderName ? ` ${context.leaderName} lead the conference.` : ""}${swingLine ? ` Swings to watch: ${swingLine}.` : ""}`;
+    return `${name} are #${seed} now and project to #${projected} — still outside the line, but ${goldPct}% means they're alive and dangerous.${context.leaderName ? ` ${context.leaderName} currently set the pace up top.` : ""}${swingLine ? ` Swing games to circle: ${swingLine}.` : ""}`;
   }
-  return `${name} (now #${seed}, projected #${projected}, ${goldPct}% Gold) need wins and chaser losses to break their way.${swingLine ? ` Swings: ${swingLine}.` : ""}`;
+  return `${name} are in survival mode (now #${seed}, projected #${projected}, ${goldPct}% Gold): they need wins plus help from around the league.${swingLine ? ` Must-watch swings: ${swingLine}.` : ""}`;
 };
 
 export type RecapInput = {
@@ -167,7 +167,7 @@ export const weeklyRecap = ({
       text:
         finalsSinceLast.length === 1
           ? `1 game finalized: ${finalsSinceLast[0]?.awayName} ${finalsSinceLast[0]?.awayScore}, ${finalsSinceLast[0]?.homeName} ${finalsSinceLast[0]?.homeScore}.`
-          : `${finalsSinceLast.length} games finalized: ${finalsSinceLast
+          : `${finalsSinceLast.length} finals dropped: ${finalsSinceLast
               .map((f) => `${f.awayName} ${f.awayScore}–${f.homeName} ${f.homeScore}`)
               .join("; ")}.`,
     });
@@ -182,7 +182,7 @@ export const weeklyRecap = ({
       const movedList = Array.from(movedNames).slice(0, 6).join(", ");
       items.push({
         kind: "summary",
-        text: `Standings shifted for ${movedList} after finalized games.`,
+        text: `The board got shuffled for ${movedList} after those finals.`,
         why: [
           "Finalized results changed standings order for multiple teams.",
           "Cut-line pressure and tie-break cascades can move teams not playing head-to-head.",
@@ -198,14 +198,14 @@ export const weeklyRecap = ({
     if (prev.goldStatus !== "Clinched" && team.goldStatus === "Clinched") {
       items.push({
         kind: "clinched",
-        text: `${displayName(team.name)} clinched the Gold Bracket.`,
+        text: `${displayName(team.name)} clinched a Gold Bracket spot.`,
         why: ["Team status changed to Clinched.", "Remaining results now affect only seeding."],
       });
     }
     if (prev.goldStatus !== "Eliminated" && team.goldStatus === "Eliminated") {
       items.push({
         kind: "eliminated",
-        text: `${displayName(team.name)} were eliminated from Gold Bracket contention.`,
+        text: `${displayName(team.name)} were knocked out of Gold Bracket contention.`,
         why: ["Team status changed to Eliminated.", "Gold path is no longer mathematically available."],
       });
     }
