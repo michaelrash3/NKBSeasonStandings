@@ -3679,7 +3679,10 @@ function GamesView({
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => toggleFinal(game.id)}
+                      onClick={(event) => {
+                        event.currentTarget.blur();
+                        toggleFinal(game.id);
+                      }}
                       className={`rounded-lg px-3 py-1 text-xs font-black ${
                         final ? "bg-emerald-600 text-white" : "bg-slate-950 text-white"
                       }`}
