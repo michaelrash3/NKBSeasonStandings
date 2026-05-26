@@ -128,4 +128,48 @@ describe("storage", () => {
     expect(saveUndoSnapshot(snapshot)).toBe(true);
     expect(readUndoSnapshot()).toEqual(snapshot);
   });
+  it("returns safe defaults when localStorage access throws", () => {
+    Object.defineProperty(globalThis, "localStorage", {
+      value: {
+        getItem: () => {
+          throw new Error("blocked");
+        },
+        setItem: () => {
+          throw new Error("blocked");
+        },
+        removeItem: () => {
+          throw new Error("blocked");
+        },
+        clear: () => {
+          throw new Error("blocked");
+        },
+      } as unknown as Storage,
+      configurable: true,
+      writable: true,
+    });
+
+    expect(loadTeams()).toEqual([]);
+    expect(loadMatchups()).toEqual([]);
+    expect(loadLogs()).toEqual({});
+    expect(loadSettings()).toEqual(DEFAULT_SETTINGS);
+    expect(readUndoSnapshot()).toBeNull();
+  });
+
+  it("returns false when undo snapshot write throws", () => {
+    Object.defineProperty(globalThis, "localStorage", {
+      value: {
+        getItem: () => null,
+        setItem: () => {
+          throw new Error("quota");
+        },
+        removeItem: () => undefined,
+        clear: () => undefined,
+      } as unknown as Storage,
+      configurable: true,
+      writable: true,
+    });
+
+    expect(saveUndoSnapshot({ kind: "delete" })).toBe(false);
+  });
+
 });
