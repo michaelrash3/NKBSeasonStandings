@@ -19,6 +19,7 @@ import { useDarkMode } from "./hooks/useDarkMode";
 import { useFocusTrap } from "./hooks/useFocusTrap";
 import { useShortcuts, type Shortcut } from "./hooks/useShortcuts";
 import { useToast } from "./hooks/useToast";
+import { useSimulationRuntimeNotice } from "./hooks/useSimulationRuntimeNotice";
 import { useUrlSnapshot } from "./hooks/useUrlState";
 import {
   useSimulationOdds,
@@ -83,7 +84,6 @@ import {
   type UndoSnapshot,
 } from "./lib/types";
 import { blankLog, clamp, isFinal, parseNumber } from "./lib/util";
-import { telemetry } from "./lib/telemetry";
 import { button as buttonClasses, card, pill, tab } from "./styles/tokens";
 
 type ActiveView = "standings" | "games" | "model" | "settings";
@@ -478,25 +478,7 @@ export default function App() {
     return { teamIds, states: built, iterations: 70, cutoff: goldCutoff, settings };
   }, [teams, matchups, logs, completedGames, goldCutoff, settings]);
 
-  const lastRuntimeRef = useRef<"worker" | "inline" | null>(null);
-  const inlineToastShownRef = useRef(false);
-
-  useEffect(() => {
-    const runtimeChanged = lastRuntimeRef.current !== simulationRuntime;
-    if (!runtimeChanged) return;
-
-    telemetry.track("simulation_runtime", { runtime: simulationRuntime });
-
-    if (simulationRuntime === "inline" && !inlineToastShownRef.current) {
-      showToast("Simulation worker unavailable; running inline mode.", {
-        tone: "info",
-        durationMs: 4000,
-      });
-      inlineToastShownRef.current = true;
-    }
-
-    lastRuntimeRef.current = simulationRuntime;
-  }, [simulationRuntime, showToast]);
+  useSimulationRuntimeNotice(simulationRuntime, showToast);
   const trendMap = useSimulationTrend(trendInput);
 
   // ---------- Dashboard / scenario computations ----------
