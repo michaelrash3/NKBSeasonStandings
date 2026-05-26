@@ -2025,10 +2025,67 @@ export default function App() {
 
   const selectedTeam = selectedTeamId ? dashboardById.get(selectedTeamId) ?? null : null;
   const compareTeam = compareTeamId ? dashboardById.get(compareTeamId) ?? null : null;
+  const currentLeader = dashboardRows[0];
+
+  const selectedTeamDetail = useMemo(() => {
+    if (!selectedTeam) return null;
+
+    const swings = nextTwoSwingGames(selectedTeam.id);
+    return {
+      range: seedRangeForTeam(selectedTeam.id),
+      bubble: bubbleTierForTeam(selectedTeam),
+      currentSosRank: currentSosRanks[selectedTeam.id] ?? null,
+      sos: scheduleDifficultyForTeam(selectedTeam.id),
+      swings,
+      clinchScenarios: clinchScenariosForTeam(selectedTeam.id),
+      titleRace: titleRaceBadgeForTeam(selectedTeam),
+      goldPctLabel: formatGoldPct(selectedTeam),
+      magic: magicForGold(
+        selectedTeam.id,
+        dashboardRows,
+        remainingGames,
+        goldCutoff,
+        settings
+      ),
+      elimination: eliminationNumberForGold(
+        selectedTeam.id,
+        dashboardRows,
+        remainingGames,
+        goldCutoff,
+        settings
+      ),
+      path: pathSummary(
+        { ...selectedTeam, rank: selectedTeam.rank ?? 99 },
+        goldCutoff,
+        swings.map((swing) => ({
+          opponentName: swing.opponentName,
+          teamIsAway: swing.teamIsAway,
+          winSeed: swing.winSeed,
+          lossSeed: swing.lossSeed,
+        })),
+        {
+          totalTeams: dashboardRows.length,
+          leaderName: currentLeader ? displayName(currentLeader.name) : "",
+        }
+      ),
+    };
+  }, [
+    selectedTeam,
+    nextTwoSwingGames,
+    seedRangeForTeam,
+    bubbleTierForTeam,
+    currentSosRanks,
+    scheduleDifficultyForTeam,
+    clinchScenariosForTeam,
+    dashboardRows,
+    remainingGames,
+    goldCutoff,
+    settings,
+    currentLeader,
+  ]);
 
   const finalCount = completedGames.length;
   const totalGamesCount = matchups.length;
-  const currentLeader = dashboardRows[0];
 
   // ---------- Share + URL snapshot ----------
 
@@ -2350,46 +2407,21 @@ export default function App() {
         )}
       </main>
 
-      {selectedTeam && (
+      {selectedTeam && selectedTeamDetail && (
         <TeamDrawer
           team={selectedTeam}
-          range={seedRangeForTeam(selectedTeam.id)}
-          bubble={bubbleTierForTeam(selectedTeam)}
-          currentSosRank={currentSosRanks[selectedTeam.id] ?? null}
-          sos={scheduleDifficultyForTeam(selectedTeam.id)}
-          swings={nextTwoSwingGames(selectedTeam.id)}
-          clinchScenarios={clinchScenariosForTeam(selectedTeam.id)}
-          titleRace={titleRaceBadgeForTeam(selectedTeam)}
-          goldPctLabel={formatGoldPct(selectedTeam)}
+          range={selectedTeamDetail.range}
+          bubble={selectedTeamDetail.bubble}
+          currentSosRank={selectedTeamDetail.currentSosRank}
+          sos={selectedTeamDetail.sos}
+          swings={selectedTeamDetail.swings}
+          clinchScenarios={selectedTeamDetail.clinchScenarios}
+          titleRace={selectedTeamDetail.titleRace}
+          goldPctLabel={selectedTeamDetail.goldPctLabel}
           cutoff={goldCutoff}
-          magicForGold={magicForGold(
-            selectedTeam.id,
-            dashboardRows,
-            remainingGames,
-            goldCutoff,
-            settings
-          )}
-          eliminationNumber={eliminationNumberForGold(
-            selectedTeam.id,
-            dashboardRows,
-            remainingGames,
-            goldCutoff,
-            settings
-          )}
-          pathSummary={pathSummary(
-            { ...selectedTeam, rank: selectedTeam.rank ?? 99 },
-            goldCutoff,
-            nextTwoSwingGames(selectedTeam.id).map((swing) => ({
-              opponentName: swing.opponentName,
-              teamIsAway: swing.teamIsAway,
-              winSeed: swing.winSeed,
-              lossSeed: swing.lossSeed,
-            })),
-            {
-              totalTeams: dashboardRows.length,
-              leaderName: currentLeader ? displayName(currentLeader.name) : "",
-            }
-          )}
+          magicForGold={selectedTeamDetail.magic}
+          eliminationNumber={selectedTeamDetail.elimination}
+          pathSummary={selectedTeamDetail.path}
           onClose={() => {
             setSelectedTeamId(null);
             setCompareTeamId(null);
