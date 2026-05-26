@@ -15,10 +15,13 @@ export function ToastView({
   onDismiss: () => void;
 }) {
   if (!toast) return null;
+  const liveMode = toast.tone === "error" ? "assertive" : "polite";
+
   return (
     <div
       role="status"
-      aria-live="polite"
+      aria-live={liveMode}
+      aria-atomic="true"
       className="pointer-events-none fixed inset-x-0 bottom-6 z-[60] flex justify-center px-4"
     >
       <div
