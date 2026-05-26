@@ -807,42 +807,72 @@ export default function App() {
 
   // ---------- Scenario helpers ----------
 
-  const seedForScenario = useCallback(
-    (teamId: string, game: Matchup, winnerId: string) => {
+  const scenarioSeedCacheRef = useRef<Map<string, Map<string, number>>>(new Map());
+  const teamScenarioSeedCacheRef = useRef<Map<string, number>>(new Map());
+  const seedRangeCacheRef = useRef<Map<string, { best: number; worst: number; baseline: number }>>(new Map());
+
+  useEffect(() => {
+    scenarioSeedCacheRef.current.clear();
+    teamScenarioSeedCacheRef.current.clear();
+    seedRangeCacheRef.current.clear();
+  }, [liveTeams, remainingGames, settings]);
+
+  const getScenarioRankMap = useCallback(
+    (game: Matchup, winnerId: string) => {
+      const scenarioKey = `${game.id}|${winnerId}`;
+      const cached = scenarioSeedCacheRef.current.get(scenarioKey);
+      if (cached) return cached;
       const scenario = applyResult(liveTeams, game, winnerId, liveTeams, settings);
       const scenarioGames = remainingGames.filter((item) => item.id !== game.id);
       const finalProjected = projectStandings(scenario, scenarioGames, settings);
-      return finalProjected.find((team) => team.id === teamId)?.rank ?? 99;
+      const rankMap = new Map<string, number>();
+      finalProjected.forEach((team) => rankMap.set(team.id, team.rank ?? 99));
+      scenarioSeedCacheRef.current.set(scenarioKey, rankMap);
+      return rankMap;
     },
     [liveTeams, remainingGames, settings]
   );
 
-  const seedRangeMap = useMemo(() => {
-    const map = new Map<string, { best: number; worst: number; baseline: number }>();
-    teams.forEach((team) => {
+  const seedForScenario = useCallback(
+    (teamId: string, game: Matchup, winnerId: string) => {
+      const cacheKey = `${teamId}|${game.id}|${winnerId}`;
+      const cached = teamScenarioSeedCacheRef.current.get(cacheKey);
+      if (cached != null) return cached;
+      const seed = getScenarioRankMap(game, winnerId).get(teamId) ?? 99;
+      teamScenarioSeedCacheRef.current.set(cacheKey, seed);
+      return seed;
+    },
+    [getScenarioRankMap]
+  );
+
+  const computeSeedRangeForTeam = useCallback(
+    (teamId: string) => {
+      const cached = seedRangeCacheRef.current.get(teamId);
+      if (cached) return cached;
       const baseline =
-        projectedById.get(team.id)?.rank ??
-        ranked.find((item) => item.id === team.id)?.rank ??
+        projectedById.get(teamId)?.rank ??
+        ranked.find((item) => item.id === teamId)?.rank ??
         99;
       let best = baseline;
       let worst = baseline;
       remainingGames.forEach((game) => {
-        const winSeed = seedForScenario(team.id, game, game.away);
-        const lossSeed = seedForScenario(team.id, game, game.home);
+        const winSeed = seedForScenario(teamId, game, game.away);
+        const lossSeed = seedForScenario(teamId, game, game.home);
         if (winSeed < best) best = winSeed;
         if (winSeed > worst) worst = winSeed;
         if (lossSeed < best) best = lossSeed;
         if (lossSeed > worst) worst = lossSeed;
       });
-      map.set(team.id, { best, worst, baseline });
-    });
-    return map;
-  }, [teams, projectedById, ranked, remainingGames, seedForScenario]);
+      const result = { best, worst, baseline };
+      seedRangeCacheRef.current.set(teamId, result);
+      return result;
+    },
+    [projectedById, ranked, remainingGames, seedForScenario]
+  );
 
   const seedRangeForTeam = useCallback(
-    (teamId: string) =>
-      seedRangeMap.get(teamId) ?? { best: 99, worst: 99, baseline: 99 },
-    [seedRangeMap]
+    (teamId: string) => computeSeedRangeForTeam(teamId) ?? { best: 99, worst: 99, baseline: 99 },
+    [computeSeedRangeForTeam]
   );
 
   const nextTwoSwingGames = useCallback(
@@ -2063,63 +2093,66 @@ export default function App() {
     return () => window.cancelAnimationFrame(id);
   }, [selectedTeamId]);
 
-  const selectedTeamDetail = useMemo(() => {
-    if (!selectedTeam || !drawerHeavyReady) return null;
+  const [selectedTeamDetail, setSelectedTeamDetail] = useState<any | null>(null);
 
-    const swings = nextTwoSwingGames(selectedTeam.id);
-    return {
-      range: seedRangeForTeam(selectedTeam.id),
+  useEffect(() => {
+    if (!selectedTeam || !drawerHeavyReady) {
+      setSelectedTeamDetail(null);
+      return;
+    }
+
+    let cancelled = false;
+    const baseDetail = {
       bubble: bubbleTierForTeam(selectedTeam),
       currentSosRank: currentSosRanks[selectedTeam.id] ?? null,
-      sos: scheduleDifficultyForTeam(selectedTeam.id),
-      swings,
-      clinchScenarios: clinchScenariosForTeam(selectedTeam.id),
-      titleRace: titleRaceBadgeForTeam(selectedTeam),
       goldPctLabel: formatGoldPct(selectedTeam),
-      magic: magicForGold(
-        selectedTeam.id,
-        dashboardRows,
-        remainingGames,
-        goldCutoff,
-        settings
-      ),
-      elimination: eliminationNumberForGold(
-        selectedTeam.id,
-        dashboardRows,
-        remainingGames,
-        goldCutoff,
-        settings
-      ),
-      path: pathSummary(
-        { ...selectedTeam, rank: selectedTeam.rank ?? 99 },
-        goldCutoff,
-        swings.map((swing) => ({
-          opponentName: swing.opponentName,
-          teamIsAway: swing.teamIsAway,
-          winSeed: swing.winSeed,
-          lossSeed: swing.lossSeed,
-        })),
-        {
-          totalTeams: dashboardRows.length,
-          leaderName: currentLeader ? displayName(currentLeader.name) : "",
-        }
-      ),
     };
-  }, [
-    selectedTeam,
-    drawerHeavyReady,
-    nextTwoSwingGames,
-    seedRangeForTeam,
-    bubbleTierForTeam,
-    currentSosRanks,
-    scheduleDifficultyForTeam,
-    clinchScenariosForTeam,
-    dashboardRows,
-    remainingGames,
-    goldCutoff,
-    settings,
-    currentLeader,
-  ]);
+    setSelectedTeamDetail(baseDetail);
+
+    const stageOne = window.setTimeout(() => {
+      if (cancelled) return;
+      const swings = nextTwoSwingGames(selectedTeam.id);
+      setSelectedTeamDetail((prev: any) => ({
+        ...prev,
+        range: seedRangeForTeam(selectedTeam.id),
+        sos: scheduleDifficultyForTeam(selectedTeam.id),
+        swings,
+        titleRace: titleRaceBadgeForTeam(selectedTeam),
+      }));
+
+      const stageTwo = window.setTimeout(() => {
+        if (cancelled) return;
+        const swingsNow = nextTwoSwingGames(selectedTeam.id);
+        setSelectedTeamDetail((prev: any) => ({
+          ...prev,
+          clinchScenarios: clinchScenariosForTeam(selectedTeam.id),
+          magic: magicForGold(selectedTeam.id, dashboardRows, remainingGames, goldCutoff, settings),
+          elimination: eliminationNumberForGold(selectedTeam.id, dashboardRows, remainingGames, goldCutoff, settings),
+          path: pathSummary(
+            { ...selectedTeam, rank: selectedTeam.rank ?? 99 },
+            goldCutoff,
+            swingsNow.map((swing) => ({
+              opponentName: swing.opponentName,
+              teamIsAway: swing.teamIsAway,
+              winSeed: swing.winSeed,
+              lossSeed: swing.lossSeed,
+            })),
+            {
+              totalTeams: dashboardRows.length,
+              leaderName: currentLeader ? displayName(currentLeader.name) : "",
+            }
+          ),
+        }));
+      }, 0);
+
+      return () => window.clearTimeout(stageTwo);
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(stageOne);
+    };
+  }, [selectedTeam, drawerHeavyReady, bubbleTierForTeam, currentSosRanks, nextTwoSwingGames, seedRangeForTeam, scheduleDifficultyForTeam, titleRaceBadgeForTeam, clinchScenariosForTeam, dashboardRows, remainingGames, goldCutoff, settings, currentLeader]);
 
   const finalCount = completedGames.length;
   const totalGamesCount = matchups.length;
