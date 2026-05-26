@@ -133,6 +133,56 @@ describe("storage", () => {
     ]);
   });
 
+
+  it("migrates legacy matchups, logs, and settings keys on read", () => {
+    const matchups = [{ id: "m2", date: "2026-05-27", away: "x", home: "y" }];
+    const logs = {
+      m2: {
+        awayRuns: "2",
+        awayHits: "3",
+        awayK: "1",
+        homeRuns: "1",
+        homeHits: "2",
+        homeK: "4",
+        innings: "6",
+        isFinal: true,
+      },
+    };
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      seasonLabel: "Summer 2026",
+      goldCutoff: 5,
+    };
+
+    localStorage.setItem("league_matchups", JSON.stringify(matchups));
+    localStorage.setItem("league_logs", JSON.stringify(logs));
+    localStorage.setItem("league_settings", JSON.stringify(settings));
+
+    expect(loadMatchups()).toEqual(matchups);
+    expect(loadLogs()).toEqual(logs);
+    expect(loadSettings()).toEqual(settings);
+
+    expect(localStorage.getItem(STORAGE_KEYS.matchups)).toBe(JSON.stringify(matchups));
+    expect(localStorage.getItem(STORAGE_KEYS.logs)).toBe(JSON.stringify(logs));
+    expect(localStorage.getItem(STORAGE_KEYS.settings)).toBe(JSON.stringify(settings));
+
+    expect(localStorage.getItem("league_matchups")).toBeNull();
+    expect(localStorage.getItem("league_logs")).toBeNull();
+    expect(localStorage.getItem("league_settings")).toBeNull();
+  });
+
+  it("returns safe defaults for malformed JSON payloads", () => {
+    localStorage.setItem(STORAGE_KEYS.teams, "not-json");
+    localStorage.setItem(STORAGE_KEYS.matchups, "not-json");
+    localStorage.setItem(STORAGE_KEYS.logs, "not-json");
+    localStorage.setItem(STORAGE_KEYS.settings, "not-json");
+
+    expect(loadTeams()).toEqual([]);
+    expect(loadMatchups()).toEqual([]);
+    expect(loadLogs()).toEqual({});
+    expect(loadSettings()).toEqual(DEFAULT_SETTINGS);
+  });
+
   it("coerces invalid settings values back to defaults", () => {
     localStorage.setItem(
       STORAGE_KEYS.settings,
