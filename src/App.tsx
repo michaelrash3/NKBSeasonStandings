@@ -847,10 +847,12 @@ export default function App() {
     return map;
   }, [remainingGames]);
 
-  const isTeamNextGame = (teamId: string, game: Matchup) =>
-    nextGameByTeam.get(teamId)?.id === game.id;
+  const isTeamNextGame = useCallback(
+    (teamId: string, game: Matchup) => nextGameByTeam.get(teamId)?.id === game.id,
+    [nextGameByTeam]
+  );
 
-  const goldStatusAfterScenario = (teamId: string, game: Matchup, winnerId: string) => {
+  const goldStatusAfterScenario = useCallback((teamId: string, game: Matchup, winnerId: string) => {
     const scenarioTeams = rankTeams(
       applyResult(liveTeams, game, winnerId, liveTeams, settings),
       { runDiffTiebreaker: settings.runDiffTiebreaker }
@@ -866,24 +868,24 @@ export default function App() {
       goldCutoff,
       settings
     ).goldStatus;
-  };
+  }, [liveTeams, settings, remainingGames, goldCutoff]);
 
-  const teamClinchesGoldWithWin = (teamId: string, game: Matchup) => {
+  const teamClinchesGoldWithWin = useCallback((teamId: string, game: Matchup) => {
     const team = dashboardById.get(teamId);
     if (!team || team.goldStatus === "Clinched" || team.goldStatus === "Eliminated") return false;
     if (!isTeamNextGame(teamId, game)) return false;
     return goldStatusAfterScenario(teamId, game, teamId) === "Clinched";
-  };
+  }, [dashboardById, isTeamNextGame, goldStatusAfterScenario]);
 
-  const teamCanBeEliminatedWithLoss = (teamId: string, game: Matchup) => {
+  const teamCanBeEliminatedWithLoss = useCallback((teamId: string, game: Matchup) => {
     const team = dashboardById.get(teamId);
     if (!team || team.goldStatus === "Clinched" || team.goldStatus === "Eliminated") return false;
     if (!isTeamNextGame(teamId, game)) return false;
     const opponentId = game.away === teamId ? game.home : game.away;
     return goldStatusAfterScenario(teamId, game, opponentId) === "Eliminated";
-  };
+  }, [dashboardById, isTeamNextGame, goldStatusAfterScenario]);
 
-  const teamClinchesRegularSeasonTitleWithWin = (teamId: string, game: Matchup) => {
+  const teamClinchesRegularSeasonTitleWithWin = useCallback((teamId: string, game: Matchup) => {
     const team = dashboardById.get(teamId);
     if (!team || team.goldStatus === "Eliminated") return false;
     if (!isTeamNextGame(teamId, game)) return false;
@@ -904,9 +906,9 @@ export default function App() {
         standingsPoints(other, settings) + (scenarioCounts[other.id] ?? 0) * settings.winPoints;
       return otherMax < titlePoints;
     });
-  };
+  }, [dashboardById, isTeamNextGame, liveTeams, settings, remainingGames]);
 
-  const gameStatusForGame = (game: Matchup) => {
+  const gameStatusForGame = useCallback((game: Matchup) => {
     const impact = getGameScenarioImpactMap.get(game.id);
     const away = dashboardById.get(game.away);
     const home = dashboardById.get(game.home);
@@ -925,7 +927,14 @@ export default function App() {
     if (impact && impact.seedImpact >= 2) return "High Impact";
     if (nearCutLine || (impact && impact.seedImpact >= 1)) return "Bubble Game";
     return "Low Impact";
-  };
+  }, [
+    getGameScenarioImpactMap,
+    dashboardById,
+    teamClinchesRegularSeasonTitleWithWin,
+    teamClinchesGoldWithWin,
+    teamCanBeEliminatedWithLoss,
+    goldCutoff,
+  ]);
 
   const gameStatusClasses = (label: string) => {
     if (label === "Title Clinch") return "bg-purple-100 text-purple-700";
@@ -957,8 +966,7 @@ export default function App() {
           date: formatGameDate(game.date),
         };
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remainingGames, dashboardById, getGameScenarioImpactMap, goldCutoff]);
+  }, [remainingGames, dashboardById, getGameScenarioImpactMap, gameImportance, gameStatusForGame]);
 
   const bubbleRows = useMemo(() => {
     return dashboardRows.map((team) => ({
@@ -1209,8 +1217,7 @@ export default function App() {
       });
     });
     return map;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remainingGames, liveTeams, settings, liveById, teamBaseById, getGameScenarioImpactMap, dashboardById, goldCutoff, nextGameByTeam]);
+  }, [remainingGames, liveTeams, settings, liveById, teamBaseById, gameStatusForGame]);
 
   // ---------- Snapshots / undo ----------
 
@@ -1239,7 +1246,7 @@ export default function App() {
     });
   };
 
-  const captureUndo = (label: string) => {
+  const captureUndo = useCallback((label: string) => {
     const snapshot: UndoSnapshot = {
       teams,
       matchups,
@@ -1249,9 +1256,9 @@ export default function App() {
     };
     undoRef.current = snapshot;
     saveUndoSnapshot(snapshot);
-  };
+  }, [teams, matchups, logs]);
 
-  const restoreUndo = () => {
+  const restoreUndo = useCallback(() => {
     const snapshot = undoRef.current ?? (readUndoSnapshot() as UndoSnapshot | null);
     if (!snapshot) return;
     setTeams(snapshot.teams);
@@ -1260,7 +1267,7 @@ export default function App() {
     setSelectedTeamId(null);
     undoRef.current = null;
     showToast(`Restored: ${snapshot.label}.`, { tone: "success" });
-  };
+  }, [setTeams, setMatchups, setLogs, showToast]);
 
   // ---------- Mutations ----------
 
@@ -1386,7 +1393,7 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  const exportCSV = () => {
+  const exportCSV = useCallback(() => {
     const headers = [
       "Game ID",
       "Date",
@@ -1435,9 +1442,9 @@ export default function App() {
     anchor.download = `${settings.seasonLabel.replace(/\s+/g, "_")}_Schedule_Data.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
-  };
+  }, [matchups, logs, teamBaseById, settings.seasonLabel]);
 
-  const exportBackup = () => {
+  const exportBackup = useCallback(() => {
     const blob = new Blob(
       [JSON.stringify({ teams, matchups, logs, settings }, null, 2)],
       { type: "application/json" }
@@ -1448,7 +1455,7 @@ export default function App() {
     anchor.download = `${settings.seasonLabel.replace(/\s+/g, "_")}_Backup.json`;
     anchor.click();
     URL.revokeObjectURL(url);
-  };
+  }, [teams, matchups, logs, settings]);
 
   const resetSeason = () => {
     if (
@@ -1775,10 +1782,19 @@ export default function App() {
       });
     }
     clearSharedSnapshot();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sharedSnapshot]);
+  }, [
+    sharedSnapshot,
+    captureUndo,
+    setTeams,
+    setMatchups,
+    setLogs,
+    setSettings,
+    showToast,
+    restoreUndo,
+    clearSharedSnapshot,
+  ]);
 
-  const shareSeason = async () => {
+  const shareSeason = useCallback(async () => {
     const snapshot = { v: 1 as const, teams, matchups, logs, settings };
     const url = buildShareUrl(window.location.href, snapshot);
     try {
@@ -1787,7 +1803,7 @@ export default function App() {
     } catch {
       window.prompt("Copy this share URL:", url);
     }
-  };
+  }, [teams, matchups, logs, settings, showToast]);
 
   // ---------- Command palette + shortcuts ----------
 
@@ -1844,8 +1860,7 @@ export default function App() {
       },
     ];
     return [...viewCmds, ...teamCmds, ...actionCmds];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dashboardRows, theme]);
+  }, [dashboardRows, theme, shareSeason, exportCSV, exportBackup, toggleTheme]);
 
   const shortcuts: Shortcut[] = useMemo(
     () => [
