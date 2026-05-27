@@ -5,18 +5,19 @@ export const stripBom = (text: string) =>
   text.startsWith(BOM) ? text.slice(1) : text;
 
 export const parseCSVLine = (line: string) => {
+  const normalized = line.replace(/\r$/, "");
   const values: string[] = [];
   let current = "";
   let inQuotes = false;
 
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
-    const next = line[i + 1];
+  for (let i = 0; i < normalized.length; i += 1) {
+    const char = normalized[i];
+    const next = normalized[i + 1];
 
     if (char === '"' && inQuotes && next === '"') {
       current += '"';
       i += 1;
-    } else if (char === '"') {
+    } else if (char === '"' && (inQuotes || current.length === 0)) {
       inQuotes = !inQuotes;
     } else if (char === "," && !inQuotes) {
       values.push(stripImportPrefix(current.trim()));

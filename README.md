@@ -58,6 +58,7 @@ src/
     insights.ts
     share.ts
     storage.ts
+    backtest.ts
   hooks/
     useSimulationWorker.ts
     useToast.ts
@@ -103,6 +104,13 @@ src/
 - Simulation and trend work run in `src/workers/sim.worker.ts`.
 - Hooks debounce updates and cancel in-flight runs.
 - Render lookups and scenario computations are memoized.
+- Simulation/projection apply evolving in-iteration team state for deterministic, non-stale forecasts.
+- Worker + inline fallback paths emit lightweight runtime timing debug logs (`[sim-worker]` / `[sim-inline]`).
+
+## Reliability checks
+
+- Backtesting harness (`src/lib/backtest.ts`) reports calibration buckets, Brier score, and upset capture rate using finalized historical games.
+- Storage/share decoding and settings coercion are defensive against corrupted payloads and out-of-range values.
 
 ## Keyboard shortcuts
 

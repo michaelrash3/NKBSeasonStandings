@@ -47,6 +47,22 @@ describe("calculateTeams", () => {
     ]);
   });
 
+  it("maintains league-wide game and outcome invariants", () => {
+    const logs: Record<string, GameLog> = {
+      g1: finalLog({ awayRuns: "8", homeRuns: "4" }),
+      g2: finalLog({ awayRuns: "3", homeRuns: "5" }),
+      g3: finalLog({ awayRuns: "2", homeRuns: "2" }),
+    };
+    const result = calculateTeams(teams, matchups, logs);
+    const totals = result.reduce(
+      (acc, t) => ({ games: acc.games + t.games, w: acc.w + t.w, l: acc.l + t.l, ties: acc.ties + t.t }),
+      { games: 0, w: 0, l: 0, ties: 0 }
+    );
+    expect(totals.games).toBe(6);
+    expect(totals.w).toBe(totals.l);
+    expect(totals.w + totals.ties / 2).toBe(3);
+  });
+
   it("tracks wins/losses/ties and runs", () => {
     const logs: Record<string, GameLog> = {
       g1: finalLog({ awayRuns: "8", homeRuns: "4" }),
@@ -144,6 +160,18 @@ describe("projectStandings + simulateGoldOdds", () => {
     const live = calculateTeams(teams, matchups, {});
     const projected = projectStandings(live, matchups, settings);
     expect(projected.map((t) => t.rank)).toEqual([1, 2, 3]);
+  });
+
+  it("produces stable projection regression output", () => {
+    const live = calculateTeams(teams, matchups, { g1: finalLog({ awayRuns: "3", homeRuns: "2" }) });
+    const projected = projectStandings(live, [matchups[1]!, matchups[2]!], settings);
+    expect(projected.map((t) => `${t.id}:${t.w}-${t.l}-${t.t}:r${t.rank}`)).toMatchInlineSnapshot(`
+      [
+        "A:2-0-0:r1",
+        "B:1-1-0:r2",
+        "C:0-2-0:r3",
+      ]
+    `);
   });
 
   it("simulator returns percentages summing to (cutoff * 100)", () => {

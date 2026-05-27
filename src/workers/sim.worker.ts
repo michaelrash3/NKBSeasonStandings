@@ -8,7 +8,8 @@ export type TrendRequest = { kind: "trend"; id: number; teamIds: string[]; state
 export type WorkerRequest = OddsRequest | TrendRequest | CancelRequest;
 export type OddsResponse = { kind: "odds"; id: number; odds: Record<string, number> };
 export type TrendResponse = { kind: "trend"; id: number; trend: Record<string, number[]> };
-export type WorkerResponse = OddsResponse | TrendResponse;
+export type RuntimeStatsResponse = { kind: "runtime-stats"; id: number; mode: "odds" | "trend"; elapsedMs: number };
+export type WorkerResponse = OddsResponse | TrendResponse | RuntimeStatsResponse;
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 const canceled = new Set<number>();
@@ -19,13 +20,16 @@ ctx.onmessage = (event: MessageEvent<WorkerRequest>) => {
   if (canceled.has(req.id)) return;
 
   if (req.kind === "odds") {
+    const start = performance.now();
     const odds = simulateGoldOdds(req.teams, req.remaining, req.iterations, req.seedText, req.cutoff, req.settings);
     if (!canceled.has(req.id)) ctx.postMessage({ kind: "odds", id: req.id, odds } satisfies OddsResponse);
+    if (!canceled.has(req.id)) ctx.postMessage({ kind: "runtime-stats", id: req.id, mode: "odds", elapsedMs: performance.now() - start } satisfies RuntimeStatsResponse);
     canceled.delete(req.id);
     return;
   }
 
   const trend: Record<string, number[]> = {};
+  const start = performance.now();
   req.teamIds.forEach((id) => { trend[id] = []; });
   req.states.forEach((state) => {
     if (canceled.has(req.id)) return;
@@ -33,5 +37,6 @@ ctx.onmessage = (event: MessageEvent<WorkerRequest>) => {
     req.teamIds.forEach((id) => { const series = trend[id]; if (series) series.push(odds[id] ?? 0); });
   });
   if (!canceled.has(req.id)) ctx.postMessage({ kind: "trend", id: req.id, trend } satisfies TrendResponse);
+  if (!canceled.has(req.id)) ctx.postMessage({ kind: "runtime-stats", id: req.id, mode: "trend", elapsedMs: performance.now() - start } satisfies RuntimeStatsResponse);
   canceled.delete(req.id);
 };
