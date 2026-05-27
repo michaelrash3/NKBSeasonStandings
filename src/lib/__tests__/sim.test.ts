@@ -81,6 +81,36 @@ describe("calculateTeams", () => {
     expect(byId.get("A")!.rs).toBe(10);
     expect(byId.get("A")!.ra).toBe(6);
   });
+
+
+  it("weights recent form more heavily in momentum", () => {
+    const formTeams: TeamBase[] = [
+      { id: "A", name: "A" },
+      { id: "B", name: "B" },
+    ];
+    const formMatchups: Matchup[] = [
+      { id: "f1", date: "5/1", away: "A", home: "B" },
+      { id: "f2", date: "5/2", away: "A", home: "B" },
+      { id: "f3", date: "5/3", away: "A", home: "B" },
+      { id: "f4", date: "5/4", away: "A", home: "B" },
+      { id: "f5", date: "5/5", away: "A", home: "B" },
+      { id: "f6", date: "5/6", away: "A", home: "B" },
+    ];
+    const logs: Record<string, GameLog> = {
+      f1: finalLog({ awayRuns: "2", homeRuns: "8" }),
+      f2: finalLog({ awayRuns: "2", homeRuns: "8" }),
+      f3: finalLog({ awayRuns: "2", homeRuns: "8" }),
+      f4: finalLog({ awayRuns: "10", homeRuns: "2" }),
+      f5: finalLog({ awayRuns: "11", homeRuns: "2" }),
+      f6: finalLog({ awayRuns: "12", homeRuns: "2" }),
+    };
+    const out = calculateTeams(formTeams, formMatchups, logs);
+    const a = out.find((t) => t.id === "A")!;
+    const b = out.find((t) => t.id === "B")!;
+    expect(a.momentum).toBeGreaterThan(0);
+    expect(b.momentum).toBeLessThan(0);
+  });
+
 });
 
 describe("standingsPoints + rankTeams", () => {

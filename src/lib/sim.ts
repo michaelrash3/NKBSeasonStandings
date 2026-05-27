@@ -265,6 +265,32 @@ export const calculateTeams = (
     home.machineDiffCount += 1;
   });
 
+
+const computeRecencyMomentum = (team: InternalTeam, byId: Map<string, InternalTeam>) => {
+  const recent = team.results.slice(-6);
+  if (recent.length < 3 || team.games === 0) return 0;
+
+  let weightedDiff = 0;
+  let weightedOppStrength = 0;
+  let weightSum = 0;
+  recent.forEach((game, index) => {
+    const age = recent.length - 1 - index;
+    const weight = 0.72 ** age;
+    const opp = byId.get(game.oppId);
+    weightedDiff += game.diff * weight;
+    weightedOppStrength += (opp?.baseTpi ?? 0) * weight;
+    weightSum += weight;
+  });
+
+  if (weightSum <= 0) return 0;
+
+  const recencyDiff = weightedDiff / weightSum;
+  const recencyOppStrength = weightedOppStrength / weightSum;
+  const seasonDiff = team.runDiff / team.games;
+
+  return clamp(recencyDiff - seasonDiff + recencyOppStrength * 0.18, -4.5, 4.5);
+};
+
   teams.forEach((team) => {
     team.sos = team.games ? team.oppTpiSum / team.games : 0;
     team.tpi = team.baseTpi + team.sos * 0.2;
@@ -272,12 +298,7 @@ export const calculateTeams = (
       ? clamp(team.machineDiffSum / team.machineDiffCount, -3, 3)
       : 0;
 
-    const recent = team.results.slice(-3);
-    if (recent.length >= 3) {
-      const recentDiff = recent.reduce((sum, game) => sum + game.diff, 0) / recent.length;
-      const seasonDiff = team.games ? team.runDiff / team.games : 0;
-      team.momentum = clamp(recentDiff - seasonDiff, -4, 4);
-    }
+    team.momentum = computeRecencyMomentum(team, byId);
   });
 
   return teams.map(
