@@ -88,6 +88,12 @@ import { button as buttonClasses, card, pill, tab } from "./styles/tokens";
 import { formatGoldPct as formatGoldPctValue, titleRaceBadgeForTeam as titleRaceBadgeForTeamValue } from "./lib/standingsView";
 
 type ActiveView = "standings" | "games" | "model" | "settings";
+type ConfirmState = {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+};
 
 type RankSnapshotEntry = Team & {
   rank: number;
@@ -623,11 +629,26 @@ export default function App() {
   >(null);
   const [scoreboardTeamFilter, setScoreboardTeamFilter] = useState("ALL");
   const [seasonBuilderText, setSeasonBuilderText] = useState("");
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
+  const confirmResolverRef = useRef<((confirmed: boolean) => void) | null>(null);
 
   const undoRef = useRef<UndoSnapshot | null>(null);
   const { toast, show: showToast, dismiss: dismissToast } = useToast();
   const { theme, toggle: toggleTheme } = useDarkMode();
   const { snapshot: sharedSnapshot, clear: clearSharedSnapshot } = useUrlSnapshot();
+  const requestConfirmation = useCallback(
+    (options: ConfirmState) =>
+      new Promise<boolean>((resolve) => {
+        confirmResolverRef.current = resolve;
+        setConfirmState(options);
+      }),
+    []
+  );
+  const resolveConfirmation = useCallback((confirmed: boolean) => {
+    confirmResolverRef.current?.(confirmed);
+    confirmResolverRef.current = null;
+    setConfirmState(null);
+  }, []);
 
   const goldCutoff = clamp(
     Math.round(settings.goldCutoff || DEFAULT_GOLD_CUTOFF),
@@ -1613,7 +1634,7 @@ export default function App() {
 
   const importCSV = (file: File) => {
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const raw = event.target?.result;
         if (typeof raw !== "string") throw new Error("File is not text");
@@ -1706,9 +1727,11 @@ export default function App() {
 
         const finalGames = Object.values(importedLogs).filter(isFinal).length;
         const openGames = importedMatchups.length - finalGames;
-        const confirmed = window.confirm(
-          `Import this schedule?\n\n${importedTeams.length} teams found\n${importedMatchups.length} games found\n${finalGames} finals imported\n${openGames} open games imported\n\nThis will replace the current season data (an undo snapshot will be saved).`
-        );
+        const confirmed = await requestConfirmation({
+          title: "Import schedule CSV?",
+          message: `${importedTeams.length} teams found · ${importedMatchups.length} games found · ${finalGames} finals · ${openGames} open.\n\nThis will replace the current season data and save an undo snapshot.`,
+          confirmLabel: "Replace season",
+        });
         if (!confirmed) return;
 
         captureUndo("CSV import");
@@ -1797,12 +1820,14 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const resetSeason = () => {
-    if (
-      !window.confirm(
-        "Reset this season? This clears teams, games, and scores from this browser (an undo snapshot will be saved)."
-      )
-    )
+  const resetSeason = async () => {
+    const confirmed = await requestConfirmation({
+      title: "Reset season?",
+      message:
+        "This clears teams, games, and scores from this browser. An undo snapshot will be saved.",
+      confirmLabel: "Reset season",
+    });
+    if (!confirmed)
       return;
     captureUndo("Reset season");
     setTeams([]);
@@ -1953,8 +1978,13 @@ export default function App() {
     setNewDate("");
   };
 
-  const removeGame = (gameId: string) => {
-    if (!window.confirm("Delete this game?")) return;
+  const removeGame = async (gameId: string) => {
+    const confirmed = await requestConfirmation({
+      title: "Delete this game?",
+      message: "This removes the game and its current score data. An undo snapshot will be saved.",
+      confirmLabel: "Delete game",
+    });
+    if (!confirmed) return;
     const game = matchups.find((m) => m.id === gameId);
     captureUndo(
       game
@@ -2035,12 +2065,14 @@ export default function App() {
     return { builtTeams, builtMatchups, builtLogs };
   };
 
-  const createSeasonFromTeamList = () => {
+  const createSeasonFromTeamList = async () => {
     const built = buildRoundRobinSeason();
     if (!built) return;
-    const confirmed = window.confirm(
-      `Create a new blank schedule?\n\n${built.builtTeams.length} teams\n${built.builtMatchups.length} games\n\nEach team will play every other team once. This will replace the current season data (an undo snapshot will be saved).`
-    );
+    const confirmed = await requestConfirmation({
+      title: "Create blank season?",
+      message: `${built.builtTeams.length} teams · ${built.builtMatchups.length} games.\n\nEach team plays every other team once. This replaces current season data and saves an undo snapshot.`,
+      confirmLabel: "Create season",
+    });
     if (!confirmed) return;
     captureUndo("Create blank season");
     setTeams(built.builtTeams);
@@ -2160,9 +2192,11 @@ export default function App() {
   useEffect(() => {
     if (!sharedSnapshot || sharedHandledRef.current) return;
     sharedHandledRef.current = true;
-    const ok = window.confirm(
-      `A shared NKB season is in the URL (${sharedSnapshot.teams.length} teams, ${sharedSnapshot.matchups.length} games).\n\nReplace your current local data with the shared snapshot?\n\nClick Cancel to keep your data; the URL will be cleared either way.`
-    );
+    requestConfirmation({
+      title: "Load shared season snapshot?",
+      message: `${sharedSnapshot.teams.length} teams · ${sharedSnapshot.matchups.length} games found in this URL.\n\nReplace your current local data? Cancel keeps your data; the URL snapshot will still be cleared.`,
+      confirmLabel: "Load snapshot",
+    }).then((ok) => {
     if (ok) {
       captureUndo("Load shared snapshot");
       setTeams(sharedSnapshot.teams);
@@ -2175,7 +2209,8 @@ export default function App() {
         onAction: restoreUndo,
       });
     }
-    clearSharedSnapshot();
+      clearSharedSnapshot();
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sharedSnapshot]);
 
@@ -2187,7 +2222,7 @@ export default function App() {
         await navigator.clipboard.writeText(url);
         showToast("Share URL copied to clipboard.", { tone: "success" });
       } catch {
-        window.prompt("Copy this share URL:", url);
+        showToast("Could not copy automatically. Share URL is ready in your browser clipboard permissions prompt.", { tone: "error" });
       }
     } catch {
       showToast("Snapshot is too large for a share URL. Download a backup JSON instead.", {
@@ -2428,7 +2463,7 @@ export default function App() {
                 await navigator.clipboard.writeText(md);
                 showToast("Recap copied.", { tone: "success" });
               } catch {
-                window.prompt("Copy this recap:", md);
+                showToast("Could not copy recap to clipboard.", { tone: "error" });
               }
             }}
             copyStory={async () => {
@@ -2438,7 +2473,7 @@ export default function App() {
                 await navigator.clipboard.writeText(story);
                 showToast("Story copied.", { tone: "success" });
               } catch {
-                window.prompt("Copy this story:", story);
+                showToast("Could not copy story to clipboard.", { tone: "error" });
               }
             }}
             dashboardRows={dashboardRows}
@@ -2559,6 +2594,39 @@ export default function App() {
         onClose={() => setShowTour(false)}
         autoOpenWhenEmpty={teams.length === 0}
       />
+      {confirmState && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" role="presentation">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label={confirmState.title}
+            className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900"
+          >
+            <h2 className="text-xl font-black tracking-tight text-slate-950 dark:text-slate-100">
+              {confirmState.title}
+            </h2>
+            <p className="mt-3 whitespace-pre-line text-sm font-semibold leading-6 text-slate-600 dark:text-slate-300">
+              {confirmState.message}
+            </p>
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => resolveConfirmation(false)}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+              >
+                {confirmState.cancelLabel ?? "Cancel"}
+              </button>
+              <button
+                type="button"
+                onClick={() => resolveConfirmation(true)}
+                className={buttonClasses.danger}
+              >
+                {confirmState.confirmLabel ?? "Confirm"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       <ToastView toast={toast} onDismiss={dismissToast} />
     </div>
