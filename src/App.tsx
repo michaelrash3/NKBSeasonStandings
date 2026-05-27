@@ -318,6 +318,7 @@ const ScoreRow = React.memo(function ScoreRow({
   ];
   const display = displayName(teamName);
   const abbr = teamAbbr(teamName);
+  const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   return (
     <div className="flex items-center justify-between gap-3">
@@ -330,17 +331,22 @@ const ScoreRow = React.memo(function ScoreRow({
         </div>
       </div>
       <div className="flex gap-2">
-        {fields.map((field) => (
+        {fields.map((field, index) => (
           <label
             key={field.key}
             className="text-center text-[10px] font-black uppercase text-slate-500"
           >
             {field.label}
             <input
+              ref={(node) => {
+                inputRefs.current[index] = node;
+              }}
               value={String(log[field.key] ?? "")}
-              onChange={(event) =>
-                onChange(field.key, event.target.value.replace(/[^0-9]/g, "").slice(0, 2))
-              }
+              onChange={(event) => {
+                const next = event.target.value.replace(/[^0-9]/g, "").slice(0, 2);
+                onChange(field.key, next);
+                if (next.length >= 2) inputRefs.current[index + 1]?.focus();
+              }}
               inputMode="numeric"
               pattern="[0-9]*"
               maxLength={2}
@@ -3790,6 +3796,12 @@ function GamesView({
   const awayId = useId();
   const homeId = useId();
   const filterId = useId();
+  const [quickFilter, setQuickFilter] = useState<"all" | "open" | "today">("all");
+
+  const todayKey = useMemo(() => {
+    const now = new Date();
+    return `${now.getUTCMonth() + 1}/${now.getUTCDate()}`;
+  }, []);
 
   const handleToggleFinal = useCallback(
     (gameId: string) => {
@@ -3801,6 +3813,24 @@ function GamesView({
     },
     [toggleFinal]
   );
+  const visibleGames = useMemo(() => {
+    if (quickFilter === "open") return scoreboardGames.filter((g) => !isFinal(logs[g.id]));
+    if (quickFilter === "today") {
+      return scoreboardGames.filter((g) => normalizeDateInput(g.date) === normalizeDateInput(todayKey));
+    }
+    return scoreboardGames;
+  }, [quickFilter, scoreboardGames, logs, todayKey]);
+  const nextOpenGameId = useMemo(
+    () => scoreboardGames.find((game) => !isFinal(logs[game.id]))?.id ?? null,
+    [scoreboardGames, logs]
+  );
+  const jumpToNextOpen = useCallback(() => {
+    if (!nextOpenGameId) return;
+    document.getElementById(`game-card-${nextOpenGameId}`)?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  }, [nextOpenGameId]);
 
   return (
     <section className="space-y-6">
@@ -3890,15 +3920,23 @@ function GamesView({
             ))}
           </select>
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => setQuickFilter("all")} className={tab(quickFilter === "all")}>All Games</button>
+          <button type="button" onClick={() => setQuickFilter("open")} className={tab(quickFilter === "open")}>Open Games</button>
+          <button type="button" onClick={() => setQuickFilter("today")} className={tab(quickFilter === "today")}>Today</button>
+          <button type="button" onClick={jumpToNextOpen} disabled={!nextOpenGameId} className="ml-auto rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white disabled:opacity-50">
+            Next Unfinalized
+          </button>
+        </div>
       </div>
 
-      {scoreboardGames.length === 0 ? (
+      {visibleGames.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm font-bold text-slate-500 dark:text-slate-400">
           No games yet. Use the form above to add one.
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {scoreboardGames.map((game) => {
+          {visibleGames.map((game) => {
             const log = logs[game.id] || blankLog();
             const away = teams.find((team) => team.id === game.away);
             const home = teams.find((team) => team.id === game.home);
@@ -3907,6 +3945,7 @@ function GamesView({
             return (
               <article
                 key={game.id}
+                id={`game-card-${game.id}`}
                 className={`overflow-hidden rounded-3xl border bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900 ${
                   final ? "border-slate-200 opacity-80 dark:border-slate-700" : "border-slate-200 dark:border-slate-700"
                 }`}
@@ -4020,6 +4059,15 @@ function GamesView({
                           ? formatGameDateLong(game.date)
                           : "Needs Date"}
                     </span>
+                    {!final && (
+                      <button
+                        type="button"
+                        onClick={() => handleToggleFinal(game.id)}
+                        className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black text-white"
+                      >
+                        Save + Final
+                      </button>
+                    )}
                   </div>
                 </div>
               </article>
