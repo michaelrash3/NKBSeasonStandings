@@ -265,6 +265,32 @@ export const calculateTeams = (
     home.machineDiffCount += 1;
   });
 
+
+const computeRecencyMomentum = (team: InternalTeam, byId: Map<string, InternalTeam>) => {
+  const recent = team.results.slice(-6);
+  if (recent.length < 3 || team.games === 0) return 0;
+
+  let weightedDiff = 0;
+  let weightedOppStrength = 0;
+  let weightSum = 0;
+  recent.forEach((game, index) => {
+    const age = recent.length - 1 - index;
+    const weight = 0.72 ** age;
+    const opp = byId.get(game.oppId);
+    weightedDiff += game.diff * weight;
+    weightedOppStrength += (opp?.baseTpi ?? 0) * weight;
+    weightSum += weight;
+  });
+
+  if (weightSum <= 0) return 0;
+
+  const recencyDiff = weightedDiff / weightSum;
+  const recencyOppStrength = weightedOppStrength / weightSum;
+  const seasonDiff = team.runDiff / team.games;
+
+  return clamp(recencyDiff - seasonDiff + recencyOppStrength * 0.18, -4.5, 4.5);
+};
+
   teams.forEach((team) => {
     team.sos = team.games ? team.oppTpiSum / team.games : 0;
     team.tpi = team.baseTpi + team.sos * 0.2;
@@ -272,12 +298,7 @@ export const calculateTeams = (
       ? clamp(team.machineDiffSum / team.machineDiffCount, -3, 3)
       : 0;
 
-    const recent = team.results.slice(-3);
-    if (recent.length >= 3) {
-      const recentDiff = recent.reduce((sum, game) => sum + game.diff, 0) / recent.length;
-      const seasonDiff = team.games ? team.runDiff / team.games : 0;
-      team.momentum = clamp(recentDiff - seasonDiff, -4, 4);
-    }
+    team.momentum = computeRecencyMomentum(team, byId);
   });
 
   return teams.map(
@@ -303,6 +324,23 @@ const buildByIdMap = (teams: Team[]) => {
   return map;
 };
 
+
+const logit = (p: number) => Math.log(p / (1 - p));
+
+export const calibrateAwayWinPct = (
+  rawPct: number,
+  awayGames: number,
+  homeGames: number,
+  aggression: number
+) => {
+  const clipped = clamp(rawPct, 0.02, 0.98);
+  const totalGames = awayGames + homeGames;
+  const reliability = clamp(totalGames / 20, 0, 1);
+  const shrink = 0.58 + reliability * 0.28;
+  const aggressionInfluence = clamp(1 + (aggression - 1) * 0.12, 0.9, 1.1);
+  const calibrated = 1 / (1 + Math.exp(-logit(clipped) * shrink * aggressionInfluence));
+  return clamp(calibrated, 0.04, 0.96);
+};
 export const predictGame = (
   game: Matchup,
   teams: Team[],
@@ -353,7 +391,8 @@ export const predictGame = (
   const rawMargin = safeAway - safeHome;
   const roundedAway = Math.round(safeAway);
   const roundedHome = Math.round(safeHome);
-  const awayWinPct = 1 / (1 + Math.exp(-rawMargin / 4));
+  const rawAwayWinPct = 1 / (1 + Math.exp(-rawMargin / 4));
+  const awayWinPct = calibrateAwayWinPct(rawAwayWinPct, away.games, home.games, aggression);
   const winnerId = rawMargin >= 0 ? game.away : game.home;
   const winnerPct = winnerId === game.away ? awayWinPct : 1 - awayWinPct;
   const margin = Math.abs(rawMargin);
@@ -466,6 +505,26 @@ export const simulationSeed = (
   return `${extras}::${finals}`;
 };
 
+
+const hasConvergedOdds = (
+  teams: Team[],
+  counts: Record<string, number>,
+  previous: Record<string, number> | null,
+  completedIterations: number,
+  thresholdPct: number
+) => {
+  if (!previous || completedIterations <= 0) return false;
+
+  let maxDelta = 0;
+  teams.forEach((team) => {
+    const currentPct = ((counts[team.id] ?? 0) / completedIterations) * 100;
+    const delta = Math.abs(currentPct - (previous[team.id] ?? 0));
+    if (delta > maxDelta) maxDelta = delta;
+  });
+
+  return maxDelta <= thresholdPct;
+};
+
 export const simulateGoldOdds = (
   teams: Team[],
   remaining: Matchup[],
@@ -480,6 +539,11 @@ export const simulateGoldOdds = (
   });
 
   const random = makeRandom(hashSeed(seedText));
+  const minIterations = Math.min(iterations, 100);
+  const convergenceCheckInterval = 25;
+  const convergenceThresholdPct = 0.35;
+  let lastSnapshot: Record<string, number> | null = null;
+  let completedIterations = 0;
 
   for (let i = 0; i < iterations; i += 1) {
     let simTeams = teams.map((team) => ({ ...team }));
@@ -496,11 +560,26 @@ export const simulateGoldOdds = (
       .forEach((team) => {
         counts[team.id] = (counts[team.id] ?? 0) + 1;
       });
+
+    completedIterations += 1;
+    const reachedMinimum = completedIterations >= minIterations;
+    const onCheckInterval = completedIterations % convergenceCheckInterval === 0;
+    if (!reachedMinimum || !onCheckInterval) continue;
+
+    if (hasConvergedOdds(teams, counts, lastSnapshot, completedIterations, convergenceThresholdPct)) {
+      break;
+    }
+
+    lastSnapshot = {};
+    teams.forEach((team) => {
+      lastSnapshot![team.id] = ((counts[team.id] ?? 0) / completedIterations) * 100;
+    });
   }
 
+  const denominator = Math.max(1, completedIterations);
   const odds: Record<string, number> = {};
   teams.forEach((team) => {
-    odds[team.id] = ((counts[team.id] ?? 0) / iterations) * 100;
+    odds[team.id] = ((counts[team.id] ?? 0) / denominator) * 100;
   });
   return odds;
 };

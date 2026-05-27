@@ -8,6 +8,7 @@ import {
   simulateGoldOdds,
   simulationSeed,
   standingsPoints,
+  calibrateAwayWinPct,
 } from "../sim";
 import { DEFAULT_SETTINGS, type GameLog, type Matchup, type Settings, type TeamBase } from "../types";
 
@@ -80,6 +81,36 @@ describe("calculateTeams", () => {
     expect(byId.get("A")!.rs).toBe(10);
     expect(byId.get("A")!.ra).toBe(6);
   });
+
+
+  it("weights recent form more heavily in momentum", () => {
+    const formTeams: TeamBase[] = [
+      { id: "A", name: "A" },
+      { id: "B", name: "B" },
+    ];
+    const formMatchups: Matchup[] = [
+      { id: "f1", date: "5/1", away: "A", home: "B" },
+      { id: "f2", date: "5/2", away: "A", home: "B" },
+      { id: "f3", date: "5/3", away: "A", home: "B" },
+      { id: "f4", date: "5/4", away: "A", home: "B" },
+      { id: "f5", date: "5/5", away: "A", home: "B" },
+      { id: "f6", date: "5/6", away: "A", home: "B" },
+    ];
+    const logs: Record<string, GameLog> = {
+      f1: finalLog({ awayRuns: "2", homeRuns: "8" }),
+      f2: finalLog({ awayRuns: "2", homeRuns: "8" }),
+      f3: finalLog({ awayRuns: "2", homeRuns: "8" }),
+      f4: finalLog({ awayRuns: "10", homeRuns: "2" }),
+      f5: finalLog({ awayRuns: "11", homeRuns: "2" }),
+      f6: finalLog({ awayRuns: "12", homeRuns: "2" }),
+    };
+    const out = calculateTeams(formTeams, formMatchups, logs);
+    const a = out.find((t) => t.id === "A")!;
+    const b = out.find((t) => t.id === "B")!;
+    expect(a.momentum).toBeGreaterThan(0);
+    expect(b.momentum).toBeLessThan(0);
+  });
+
 });
 
 describe("standingsPoints + rankTeams", () => {
@@ -133,6 +164,19 @@ describe("predictGame", () => {
   });
 
 
+  it("calibrates probabilities away from overconfident extremes", () => {
+    const aggressive = calibrateAwayWinPct(0.9, 2, 2, 1.25);
+    const mature = calibrateAwayWinPct(0.9, 12, 12, 1.25);
+    expect(aggressive).toBeLessThan(0.9);
+    expect(mature).toBeGreaterThan(aggressive);
+  });
+
+  it("keeps calibration symmetric around 50%", () => {
+    const favored = calibrateAwayWinPct(0.72, 8, 8, 1);
+    const underdog = calibrateAwayWinPct(0.28, 8, 8, 1);
+    expect(Math.abs((favored + underdog) - 1)).toBeLessThan(0.001);
+  });
+
 });
 
 describe("applyResult", () => {
@@ -179,6 +223,15 @@ describe("projectStandings + simulateGoldOdds", () => {
     const odds = simulateGoldOdds(live, matchups, 60, "test-seed", 2, settings);
     const total = Object.values(odds).reduce((sum, v) => sum + v, 0);
     // Each iteration awards `cutoff` slots, so total percent equals cutoff*100.
+    expect(Math.round(total)).toBe(200);
+  });
+
+
+
+  it("maintains cutoff-slot normalization even with adaptive convergence", () => {
+    const live = calculateTeams(teams, matchups, {});
+    const odds = simulateGoldOdds(live, matchups, 500, "adaptive-seed", 2, settings);
+    const total = Object.values(odds).reduce((sum, v) => sum + v, 0);
     expect(Math.round(total)).toBe(200);
   });
 
