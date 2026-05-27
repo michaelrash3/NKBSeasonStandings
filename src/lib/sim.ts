@@ -429,10 +429,10 @@ export const projectStandings = (
   settings: Settings
 ) => {
   let projected = teams.map((team) => ({ ...team }));
-  const byId = buildByIdMap(teams);
   games.forEach((game) => {
-    const prediction = predictGame(game, teams, settings, byId);
-    projected = applyResult(projected, game, prediction.winnerId, teams, settings);
+    const projectionById = buildByIdMap(projected);
+    const prediction = predictGame(game, projected, settings, projectionById);
+    projected = applyResult(projected, game, prediction.winnerId, projected, settings);
   });
   return rankTeams(projected, { runDiffTiebreaker: settings.runDiffTiebreaker });
 };
@@ -479,16 +479,16 @@ export const simulateGoldOdds = (
     counts[team.id] = 0;
   });
 
-  const byId = buildByIdMap(teams);
   const random = makeRandom(hashSeed(seedText));
 
   for (let i = 0; i < iterations; i += 1) {
     let simTeams = teams.map((team) => ({ ...team }));
 
     remaining.forEach((game) => {
-      const prediction = predictGame(game, teams, settings, byId);
+      const simById = buildByIdMap(simTeams);
+      const prediction = predictGame(game, simTeams, settings, simById);
       const winner = random() < prediction.awayWinPct ? game.away : game.home;
-      simTeams = applyResult(simTeams, game, winner, teams, settings);
+      simTeams = applyResult(simTeams, game, winner, simTeams, settings);
     });
 
     rankTeams(simTeams, { runDiffTiebreaker: settings.runDiffTiebreaker })

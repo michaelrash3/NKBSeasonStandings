@@ -21,13 +21,13 @@ export const coerceSettings = (raw: unknown): Settings => {
   const recapGrouping: RecapGrouping = isString(recapGroupingRaw) && RECAP_GROUPING_VALUES.includes(recapGroupingRaw as RecapGrouping) ? (recapGroupingRaw as RecapGrouping) : DEFAULT_SETTINGS.recapGrouping;
 
   return {
-    goldCutoff: isNumber(raw.goldCutoff) ? Math.max(1, Math.round(raw.goldCutoff)) : DEFAULT_SETTINGS.goldCutoff,
+    goldCutoff: isNumber(raw.goldCutoff) ? Math.min(64, Math.max(1, Math.round(raw.goldCutoff))) : DEFAULT_SETTINGS.goldCutoff,
     seasonLabel: isString(raw.seasonLabel) ? raw.seasonLabel.slice(0, 80) : DEFAULT_SETTINGS.seasonLabel,
-    regularSeasonGamesPerTeam: isNumber(raw.regularSeasonGamesPerTeam) ? raw.regularSeasonGamesPerTeam : DEFAULT_SETTINGS.regularSeasonGamesPerTeam,
-    winPoints: isNumber(raw.winPoints) ? raw.winPoints : DEFAULT_SETTINGS.winPoints,
-    tiePoints: isNumber(raw.tiePoints) ? raw.tiePoints : DEFAULT_SETTINGS.tiePoints,
+    regularSeasonGamesPerTeam: isNumber(raw.regularSeasonGamesPerTeam) ? Math.min(200, Math.max(0, Math.round(raw.regularSeasonGamesPerTeam))) : DEFAULT_SETTINGS.regularSeasonGamesPerTeam,
+    winPoints: isNumber(raw.winPoints) ? Math.min(10, Math.max(0, raw.winPoints)) : DEFAULT_SETTINGS.winPoints,
+    tiePoints: isNumber(raw.tiePoints) ? Math.min(10, Math.max(0, raw.tiePoints)) : DEFAULT_SETTINGS.tiePoints,
     runDiffTiebreaker: isBoolean(raw.runDiffTiebreaker) ? raw.runDiffTiebreaker : DEFAULT_SETTINGS.runDiffTiebreaker,
-    maxScoreCap: isNumber(raw.maxScoreCap) ? raw.maxScoreCap : DEFAULT_SETTINGS.maxScoreCap,
+    maxScoreCap: isNumber(raw.maxScoreCap) ? Math.min(99, Math.max(1, Math.round(raw.maxScoreCap))) : DEFAULT_SETTINGS.maxScoreCap,
     modelAggression,
     recapGrouping,
   };

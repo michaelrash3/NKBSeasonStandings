@@ -90,6 +90,10 @@ export function useSimulationOdds(input: OddsInput, debounceMs = 200) {
 
       if (handle.worker) {
         const onMessage = (event: MessageEvent<WorkerResponse>) => {
+          if (event.data.kind === "runtime-stats" && event.data.id === id) {
+            console.debug(`[sim-worker] odds ${event.data.elapsedMs.toFixed(1)}ms`);
+            return;
+          }
           if (event.data.kind !== "odds" || event.data.id !== id) return;
           handle.worker?.removeEventListener("message", onMessage);
           if (latestIdRef.current === id) {
@@ -110,6 +114,7 @@ export function useSimulationOdds(input: OddsInput, debounceMs = 200) {
         };
         handle.worker.postMessage(req);
       } else {
+        const start = performance.now();
         const result = simulateGoldOdds(
           input.teams,
           input.remaining,
@@ -121,6 +126,7 @@ export function useSimulationOdds(input: OddsInput, debounceMs = 200) {
         if (latestIdRef.current === id) {
           setOdds(result);
           setPending(false);
+          console.debug(`[sim-inline] odds ${(performance.now() - start).toFixed(1)}ms`);
         }
       }
     }, debounceMs);
@@ -179,6 +185,10 @@ export function useSimulationTrend(input: TrendInput, debounceMs = 250) {
 
       if (handle.worker) {
         const onMessage = (event: MessageEvent<WorkerResponse>) => {
+          if (event.data.kind === "runtime-stats" && event.data.id === id) {
+            console.debug(`[sim-worker] trend ${event.data.elapsedMs.toFixed(1)}ms`);
+            return;
+          }
           if (event.data.kind !== "trend" || event.data.id !== id) return;
           handle.worker?.removeEventListener("message", onMessage);
           if (latestIdRef.current === id) {
@@ -197,6 +207,7 @@ export function useSimulationTrend(input: TrendInput, debounceMs = 250) {
         };
         handle.worker.postMessage(req);
       } else {
+        const start = performance.now();
         const result: Record<string, number[]> = {};
         input.teamIds.forEach((tid) => {
           result[tid] = [];
@@ -216,6 +227,7 @@ export function useSimulationTrend(input: TrendInput, debounceMs = 250) {
           });
         });
         if (latestIdRef.current === id) setTrend(result);
+        console.debug(`[sim-inline] trend ${(performance.now() - start).toFixed(1)}ms`);
       }
     }, debounceMs);
 
