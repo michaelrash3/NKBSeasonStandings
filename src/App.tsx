@@ -88,7 +88,7 @@ import { blankLog, clamp, isFinal, parseNumber } from "./lib/util";
 import { button as buttonClasses, card, pill, tab } from "./styles/tokens";
 import { formatGoldPct as formatGoldPctValue, titleRaceBadgeForTeam as titleRaceBadgeForTeamValue } from "./lib/standingsView";
 
-type ActiveView = "standings" | "games" | "model" | "settings";
+type ActiveView = "standings" | "games" | "model" | "clinch" | "settings";
 type ConfirmState = {
   title: string;
   message: string;
@@ -104,15 +104,21 @@ type RankSnapshotEntry = Team & {
   maxPoints: number;
   blockersAhead: number;
 };
+type ClinchScenarioRow = {
+  team: TeamWithProjection;
+  bucket: "Controls Destiny" | "Needs Help" | "Long Shot";
+  scenarios: string[];
+};
 
 const VIEW_LABELS: Record<ActiveView, string> = {
   standings: "Standings",
   games: "Schedule",
   model: "Season Predictor",
+  clinch: "Clinch Scenarios",
   settings: "Settings",
 };
 
-const VIEW_ORDER: ActiveView[] = ["standings", "games", "model", "settings"];
+const VIEW_ORDER: ActiveView[] = ["standings", "games", "model", "clinch", "settings"];
 
 // ---------- Helpers that depend on app-shape but no state ----------
 
@@ -1429,6 +1435,58 @@ export default function App() {
 
   const formatGoldPct = useCallback((team: TeamWithProjection) => formatGoldPctValue(team), []);
 
+  const clinchScenarioRows = useMemo<ClinchScenarioRow[]>(() => {
+    const openTeams = dashboardRows.filter(
+      (team) => team.goldStatus !== "Clinched" && team.goldStatus !== "Eliminated"
+    );
+
+    const linesForTeam = (team: TeamWithProjection) => {
+      const lines: string[] = [];
+      const ownGame = nextGameByTeam.get(team.id);
+      if (ownGame) {
+        const opponentId = ownGame.away === team.id ? ownGame.home : ownGame.away;
+        const opponentName = displayName(dashboardById.get(opponentId)?.name || opponentId);
+        const ownWinClinches = goldStatusAfterScenario(team.id, ownGame, team.id) === "Clinched";
+        if (ownWinClinches) {
+          lines.push(`Win ${team.id === ownGame.away ? "at" : "vs"} ${opponentName}.`);
+        }
+      }
+
+      remainingGames.slice(0, 20).forEach((game) => {
+        if (game.away === team.id || game.home === team.id) return;
+        const awayClinches = teamsClinchingAfterGameResult(game, game.away).includes(team.id);
+        const homeClinches = teamsClinchingAfterGameResult(game, game.home).includes(team.id);
+        if (awayClinches !== homeClinches) {
+          const winnerId = awayClinches ? game.away : game.home;
+          const loserId = awayClinches ? game.home : game.away;
+          const winnerName = displayName(dashboardById.get(winnerId)?.name || winnerId);
+          const loserName = displayName(dashboardById.get(loserId)?.name || loserId);
+          lines.push(`Need help: ${winnerName} over ${loserName}.`);
+        }
+      });
+
+      return Array.from(new Set(lines)).slice(0, 4);
+    };
+
+    return openTeams
+      .map((team) => {
+        const scenarios = linesForTeam(team);
+        const hasControl = scenarios.some((line) => !line.startsWith("Need help:"));
+        const hasHelp = scenarios.some((line) => line.startsWith("Need help:"));
+        const bucket: ClinchScenarioRow["bucket"] = hasControl
+          ? hasHelp
+            ? "Needs Help"
+            : "Controls Destiny"
+          : "Long Shot";
+        return { team, bucket, scenarios: scenarios.length ? scenarios : ["No immediate clinch path in the next slate."] };
+      })
+      .sort((a, b) => {
+        const gapA = Math.abs((a.team.rank ?? 99) - goldCutoff);
+        const gapB = Math.abs((b.team.rank ?? 99) - goldCutoff);
+        return gapA - gapB;
+      });
+  }, [dashboardRows, nextGameByTeam, dashboardById, goldStatusAfterScenario, remainingGames, teamsClinchingAfterGameResult, goldCutoff]);
+
   const statusLabel = (team: TeamWithProjection) => {
     if (team.goldStatus === "Clinched") return "Clinched";
     if (team.goldStatus === "Eliminated") return "Eliminated";
@@ -2215,6 +2273,7 @@ export default function App() {
     standings: null,
     games: null,
     model: null,
+    clinch: null,
     settings: null,
   });
 
@@ -2602,6 +2661,11 @@ export default function App() {
             exportCSV={exportCSV}
             exportBackup={exportBackup}
             resetSeason={resetSeason}
+          />
+        ) : activeView === "clinch" ? (
+          <ClinchScenariosView
+            rows={clinchScenarioRows}
+            goldCutoff={goldCutoff}
           />
         ) : (
           <GamesView
@@ -3626,6 +3690,63 @@ function ModelView(props: {
           </div>
         )}
       </section>
+    </section>
+  );
+}
+
+function ClinchScenariosView({
+  rows,
+  goldCutoff,
+}: {
+  rows: ClinchScenarioRow[];
+  goldCutoff: number;
+}) {
+  const groups: ClinchScenarioRow["bucket"][] = ["Controls Destiny", "Needs Help", "Long Shot"];
+  return (
+    <section className={`${card} p-5`}>
+      <div className="mb-4">
+        <h3 className="text-lg font-black tracking-tight text-slate-950 dark:text-slate-100">
+          Gold Clinch Scenarios
+        </h3>
+        <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-300">
+          Paths that can clinch a top {goldCutoff} Gold Bracket spot based on upcoming results.
+        </p>
+      </div>
+      <div className="space-y-5">
+        {groups.map((group) => {
+          const groupRows = rows.filter((row) => row.bucket === group);
+          if (!groupRows.length) return null;
+          return (
+            <div key={group}>
+              <h4 className="mb-3 text-sm font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                {group}
+              </h4>
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                {groupRows.map(({ team, scenarios }) => (
+                  <article
+                    key={`clinch-${team.id}`}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-black text-slate-950 dark:text-slate-100">{displayName(team.name)}</div>
+                      <div className="text-xs font-black text-slate-500 dark:text-slate-400">
+                        #{team.rank} now · #{team.projectedRank} projected
+                      </div>
+                    </div>
+                    <ul className="mt-3 space-y-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      {scenarios.map((line, idx) => (
+                        <li key={`${team.id}-${idx}`} className="rounded-lg bg-white px-3 py-2 ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
+                          {line}
+                        </li>
+                      ))}
+                    </ul>
+                  </article>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }
