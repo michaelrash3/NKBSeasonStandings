@@ -311,6 +311,57 @@ describe("projectStandings + simulateGoldOdds", () => {
     `);
   });
 
+  it("uses custom scoring settings when ranking projected standings", () => {
+    const higherWinTotal = {
+      ...emptyTeam({ id: "A", name: "9-3 Team" }),
+      w: 9,
+      l: 3,
+      games: 12,
+      pct: 9 / 12,
+    };
+    const tieHeavy = {
+      ...emptyTeam({ id: "B", name: "8-2-3 Team" }),
+      w: 8,
+      l: 2,
+      t: 3,
+      games: 13,
+      pct: (8 + 3 * 0.5) / 13,
+    };
+
+    const projected = projectStandings([tieHeavy, higherWinTotal], [], {
+      ...settings,
+      tiePoints: 0,
+    });
+
+    expect(projected.map((team) => team.id)).toEqual(["A", "B"]);
+  });
+
+  it("uses custom scoring settings when ranking simulated gold odds", () => {
+    const higherWinTotal = {
+      ...emptyTeam({ id: "A", name: "9-3 Team" }),
+      w: 9,
+      l: 3,
+      games: 12,
+      pct: 9 / 12,
+    };
+    const tieHeavy = {
+      ...emptyTeam({ id: "B", name: "8-2-3 Team" }),
+      w: 8,
+      l: 2,
+      t: 3,
+      games: 13,
+      pct: (8 + 3 * 0.5) / 13,
+    };
+
+    const odds = simulateGoldOdds([tieHeavy, higherWinTotal], [], 10, "custom-scoring", 1, {
+      ...settings,
+      tiePoints: 0,
+    });
+
+    expect(odds.A).toBe(100);
+    expect(odds.B).toBe(0);
+  });
+
   it("simulator returns percentages summing to (cutoff * 100)", () => {
     const live = calculateTeams(teams, matchups, {});
     const odds = simulateGoldOdds(live, matchups, 60, "test-seed", 2, settings);

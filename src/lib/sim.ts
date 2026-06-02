@@ -542,6 +542,8 @@ export const projectStandings = (teams: Team[], games: Matchup[], settings: Sett
   return rankTeams(projected, {
     runDiffTiebreaker: settings.runDiffTiebreaker,
     tiebreakerOrder: settings.tiebreakerOrder,
+    winPoints: settings.winPoints,
+    tiePoints: settings.tiePoints,
   });
 };
 
@@ -626,6 +628,8 @@ export const simulateGoldOdds = (
     rankTeams(simTeams, {
       runDiffTiebreaker: settings.runDiffTiebreaker,
       tiebreakerOrder: settings.tiebreakerOrder,
+      winPoints: settings.winPoints,
+      tiePoints: settings.tiePoints,
     })
       .slice(0, cutoff)
       .forEach((team) => {
