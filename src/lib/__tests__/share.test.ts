@@ -39,6 +39,23 @@ describe("encode / decodeSnapshot", () => {
     expect(decoded).toEqual(snapshot);
   });
 
+  it("uses a compact URL payload and round-trips through the public shape", () => {
+    const encoded = encodeSnapshot(snapshot);
+    const legacyJson = JSON.stringify(snapshot);
+    expect(encoded.length).toBeLessThan(legacyJson.length);
+    expect(decodeSnapshot(encoded)).toEqual(snapshot);
+  });
+
+  it("decodes legacy v1 payloads", () => {
+    const bytes = new TextEncoder().encode(JSON.stringify(snapshot));
+    let binary = "";
+    bytes.forEach((byte) => {
+      binary += String.fromCharCode(byte);
+    });
+    const legacy = btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    expect(decodeSnapshot(legacy)).toEqual(snapshot);
+  });
+
   it("returns null for garbage", () => {
     expect(decodeSnapshot("not-base64-data!!")).toBeNull();
   });
@@ -72,7 +89,7 @@ describe("buildShareUrl + readSharedFromHash", () => {
   it("throws when share payload is too large", () => {
     const largeSnapshot: SharedSnapshot = {
       ...snapshot,
-      teams: Array.from({ length: 400 }, (_, i) => ({ id: `T${i}`, name: `Team ${i}` })),
+      teams: Array.from({ length: 1000 }, (_, i) => ({ id: `T${i}`, name: `Team ${i}` })),
     };
     expect(() => buildShareUrl("https://example.com", largeSnapshot)).toThrow();
   });

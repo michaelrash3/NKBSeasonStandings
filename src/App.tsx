@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { registerSW } from "virtual:pwa-register";
 import { CommandPalette, type Command } from "./components/CommandPalette";
 import { ClinchingPathsPanel } from "./components/ClinchingPathsPanel";
 import { CompareDrawer } from "./components/CompareDrawer";
@@ -28,6 +29,7 @@ import {
   sundayEndingWeekKey,
 } from "./lib/date";
 import { displayName, recordText, teamAbbr } from "./lib/format";
+import { summarizeCsvImportIssues, type CsvImportIssue } from "./lib/importReport";
 import {
   pathSummary,
   recapToMarkdown,
@@ -39,6 +41,7 @@ import { eliminationNumberForGold, magicForGold } from "./lib/magic";
 import { backtestPredictions } from "./lib/backtest";
 import { buildBracketProjection, type BracketGameProjection } from "./lib/bracket";
 import { buildShareUrl } from "./lib/share";
+import { formatProbabilityMargin, wilsonScoreInterval } from "./lib/probability";
 import { buildSeasonTimeline, type SeasonTimelineEntry } from "./lib/seasonTimeline";
 import { coerceLogs, coerceMatchups, coerceSettings, coerceTeams, isRecord } from "./lib/validate";
 import {
@@ -102,6 +105,10 @@ type ConfirmState = {
   confirmLabel?: string;
   cancelLabel?: string;
 };
+
+type SaveStatus =
+  | { state: "saved"; label: string; timestamp: number }
+  | { state: "error"; label: string; timestamp: number };
 
 type TeamSplitLine = {
   label: string;
@@ -1192,6 +1199,8 @@ export default function App() {
   const [isOffline, setIsOffline] = useState(
     typeof navigator !== "undefined" ? !navigator.onLine : false
   );
+  const [saveStatus, setSaveStatus] = useState<SaveStatus | null>(null);
+  const [updateApp, setUpdateApp] = useState<(() => Promise<void>) | null>(null);
   useEffect(() => {
     const onOnline = () => setIsOffline(false);
     const onOffline = () => setIsOffline(true);
@@ -1216,7 +1225,34 @@ export default function App() {
 
   const undoRef = useRef<UndoSnapshot | null>(null);
   const { toast, show: showToast, dismiss: dismissToast } = useToast();
+  const recordSaveResult = useCallback(
+    (ok: boolean, label: string, errorMessage: string) => {
+      const timestamp = Date.now();
+      setSaveStatus({ state: ok ? "saved" : "error", label, timestamp });
+      if (!ok) showToast(errorMessage, { tone: "error" });
+    },
+    [showToast]
+  );
   const { theme, toggle: toggleTheme } = useDarkMode();
+
+  useEffect(() => {
+    const updateSW = registerSW({
+      immediate: true,
+      onNeedRefresh() {
+        setUpdateApp(() => () => updateSW(true));
+        showToast("A fresh app version is ready.", {
+          tone: "info",
+          actionLabel: "Reload",
+          onAction: () => {
+            void updateSW(true);
+          },
+        });
+      },
+      onOfflineReady() {
+        showToast("App shell cached for offline use.", { tone: "success" });
+      },
+    });
+  }, [showToast]);
   const {
     snapshot: sharedSnapshot,
     uiState: sharedUiState,
@@ -1265,34 +1301,28 @@ export default function App() {
   // ---------- Persisted state ----------
 
   useEffect(() => {
-    if (!saveTeams(teams)) {
-      showToast("Could not save teams (storage full).", { tone: "error" });
-    }
-  }, [teams, showToast]);
+    recordSaveResult(saveTeams(teams), "teams", "Could not save teams (storage full).");
+  }, [teams, recordSaveResult]);
 
   useEffect(() => {
-    if (!saveMatchups(matchups)) {
-      showToast("Could not save schedule (storage full).", { tone: "error" });
-    }
-  }, [matchups, showToast]);
+    recordSaveResult(saveMatchups(matchups), "schedule", "Could not save schedule (storage full).");
+  }, [matchups, recordSaveResult]);
 
   useEffect(() => {
-    if (!saveLogs(logs)) {
-      showToast("Could not save scores (storage full).", { tone: "error" });
-    }
-  }, [logs, showToast]);
+    recordSaveResult(saveLogs(logs), "scores", "Could not save scores (storage full).");
+  }, [logs, recordSaveResult]);
 
   useEffect(() => {
-    if (!saveBracketLogs(bracketLogs)) {
-      showToast("Could not save bracket scores (storage full).", { tone: "error" });
-    }
-  }, [bracketLogs, showToast]);
+    recordSaveResult(
+      saveBracketLogs(bracketLogs),
+      "bracket scores",
+      "Could not save bracket scores (storage full)."
+    );
+  }, [bracketLogs, recordSaveResult]);
 
   useEffect(() => {
-    if (!saveSettings(settings)) {
-      showToast("Could not save settings (storage full).", { tone: "error" });
-    }
-  }, [settings, showToast]);
+    recordSaveResult(saveSettings(settings), "settings", "Could not save settings (storage full).");
+  }, [settings, recordSaveResult]);
 
   useEffect(() => {
     if (!newAway && teams[0]) setNewAway(teams[0].id);
@@ -1341,8 +1371,7 @@ export default function App() {
       ),
     [liveTeams, remainingGames, settings.regularSeasonGamesPerTeam]
   );
-  const exactScenarioAnalysisEnabled =
-    remainingGames.length <= EXACT_SCENARIO_REMAINING_GAME_LIMIT;
+  const exactScenarioAnalysisEnabled = remainingGames.length <= EXACT_SCENARIO_REMAINING_GAME_LIMIT;
 
   const projected = useMemo(
     () => projectStandings(liveTeams, remainingGames, settings),
@@ -1428,6 +1457,7 @@ export default function App() {
         projectedRecord: projectedTeam ? recordText(projectedTeam) : recordText(team),
         projectedRunDiff: projectedTeam?.runDiff ?? team.runDiff,
         goldPct: odds[team.id] ?? 0,
+        goldPctMargin: wilsonScoreInterval((odds[team.id] ?? 0) / 100, SIM_ITERATIONS).margin * 100,
         goldTrend: trendMap[team.id] ?? [],
         ...status,
       };
@@ -2314,7 +2344,10 @@ export default function App() {
       timestamp: Date.now(),
     };
     undoRef.current = snapshot;
-    saveUndoSnapshot(snapshot);
+    if (!saveUndoSnapshot(snapshot)) {
+      setSaveStatus({ state: "error", label: "undo snapshot", timestamp: Date.now() });
+      showToast("Could not save undo snapshot (storage full).", { tone: "error" });
+    }
   };
 
   const restoreUndo = () => {
@@ -2380,29 +2413,32 @@ export default function App() {
         const importedMatchups: Matchup[] = [];
         const importedLogs: Record<string, GameLog> = {};
         const importSuffix = Math.random().toString(36).slice(2, 8);
-        let missingTeamRows = 0;
-        let unknownTeamRows = 0;
-        let duplicateIdRows = 0;
+        const importIssues: CsvImportIssue[] = [];
         const seenIds = new Set<string>();
 
         rows.forEach((row, rowIndex) => {
           const awayName = row[awayTeamIndex]?.trim();
           const homeName = row[homeTeamIndex]?.trim();
+          const csvRowNumber = rowIndex + 2;
           if (!awayName || !homeName) {
-            missingTeamRows += 1;
+            importIssues.push({ kind: "missing-team", rowNumber: csvRowNumber });
             return;
           }
 
           const away = nameToId.get(awayName);
           const home = nameToId.get(homeName);
           if (!away || !home) {
-            unknownTeamRows += 1;
+            importIssues.push({
+              kind: "unknown-team",
+              rowNumber: csvRowNumber,
+              detail: [awayName, homeName].filter((name) => !nameToId.has(name)).join(" vs "),
+            });
             return;
           }
 
           const id = row[gameIdIndex]?.trim() || `game_${Date.now()}_${importSuffix}_${rowIndex}`;
           if (seenIds.has(id)) {
-            duplicateIdRows += 1;
+            importIssues.push({ kind: "duplicate-id", rowNumber: csvRowNumber, detail: id });
             return;
           }
           seenIds.add(id);
@@ -2438,13 +2474,7 @@ export default function App() {
 
         const finalGames = Object.values(importedLogs).filter(isFinal).length;
         const openGames = importedMatchups.length - finalGames;
-        const warningLines: string[] = [];
-        if (missingTeamRows)
-          warningLines.push(`${missingTeamRows} row(s) skipped: missing Away/Home team`);
-        if (unknownTeamRows)
-          warningLines.push(`${unknownTeamRows} row(s) skipped: team name mismatch`);
-        if (duplicateIdRows)
-          warningLines.push(`${duplicateIdRows} row(s) skipped: duplicate Game ID`);
+        const warningLines = summarizeCsvImportIssues(importIssues);
         const confirmed = await requestConfirmation({
           title: "Import schedule CSV?",
           message: `${importedTeams.length} teams found · ${importedMatchups.length} games found · ${finalGames} finals · ${openGames} open.\n\n${
@@ -2461,11 +2491,14 @@ export default function App() {
         setBracketLogs({});
         closeTeamData();
         setActiveView("standings");
-        showToast(`Imported ${importedMatchups.length} games.`, {
-          tone: "undo",
-          actionLabel: "Undo",
-          onAction: restoreUndo,
-        });
+        showToast(
+          `Imported ${importedMatchups.length} games${importIssues.length ? ` with ${importIssues.length} skipped row(s)` : ""}.`,
+          {
+            tone: "undo",
+            actionLabel: "Undo",
+            onAction: restoreUndo,
+          }
+        );
       } catch (error) {
         console.error(error);
         showToast(
@@ -3281,8 +3314,22 @@ export default function App() {
                 <h1 className="text-3xl font-black tracking-tight text-slate-950 dark:text-slate-100">
                   NKB Season Tracker
                 </h1>
-                <div className="mt-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                  {settings.seasonLabel}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <div className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                    {settings.seasonLabel}
+                  </div>
+                  {saveStatus && (
+                    <div
+                      className={`inline-flex rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide ${
+                        saveStatus.state === "saved"
+                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                          : "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+                      }`}
+                      title={`${saveStatus.label} ${new Date(saveStatus.timestamp).toLocaleTimeString()}`}
+                    >
+                      {saveStatus.state === "saved" ? "Saved" : "Save failed"} · {saveStatus.label}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -3303,6 +3350,17 @@ export default function App() {
                     aria-label="Copy share URL for this season"
                   >
                     Share
+                  </button>
+                )}
+                {updateApp && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void updateApp();
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700 shadow-sm hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                  >
+                    Reload update
                   </button>
                 )}
                 <button
@@ -3395,6 +3453,7 @@ export default function App() {
               statusClass={statusClass}
               statusLabel={statusLabel}
               formatGoldPct={formatGoldPct}
+              formatGoldMargin={(team) => formatProbabilityMargin((team.goldPctMargin ?? 0) / 100)}
               onSelectTeam={openTeamData}
               leagueAverageStats={leagueAverageStats}
             />
@@ -3413,6 +3472,7 @@ export default function App() {
               scheduleDifficultyForTeam={scheduleDifficultyForTeam}
               teamPathNote={teamPathNote}
               formatGoldPct={formatGoldPct}
+              formatGoldMargin={(team) => formatProbabilityMargin((team.goldPctMargin ?? 0) / 100)}
               projectedCutLineTeams={projectedCutLineTeams}
               nextTwoSwingGames={nextTwoSwingGames}
               gameForecasts={gameForecasts}
@@ -3722,6 +3782,7 @@ function StandingsView({
   statusClass,
   statusLabel,
   formatGoldPct,
+  formatGoldMargin,
   onSelectTeam,
   leagueAverageStats,
 }: {
@@ -3745,6 +3806,7 @@ function StandingsView({
   statusClass: (t: TeamWithProjection) => string;
   statusLabel: (t: TeamWithProjection) => string;
   formatGoldPct: (t: TeamWithProjection) => string;
+  formatGoldMargin: (t: TeamWithProjection) => string;
   onSelectTeam: (id: string) => void;
   leagueAverageStats: LeagueAverageStats;
 }) {
@@ -4001,6 +4063,9 @@ function StandingsView({
                             >
                               {formatGoldPct(team)}
                             </span>
+                            <div className="mt-1 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                              {formatGoldMargin(team)} sim. error
+                            </div>
                           </td>
                           <td className="px-4 py-4 text-center">
                             <span
@@ -4085,6 +4150,9 @@ function StandingsView({
                         >
                           {formatGoldPct(team)}
                         </span>
+                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                          {formatGoldMargin(team)}
+                        </span>
                         <span
                           aria-label={`Playoff status: ${statusLabel(team)}`}
                           className={`rounded-full px-2 py-0.5 text-[10px] font-black ${statusClass(team)}`}
@@ -4138,6 +4206,7 @@ function ModelView(props: {
   scheduleDifficultyForTeam: (id: string) => { label: string; opponents: string };
   teamPathNote: (t: TeamWithProjection) => string;
   formatGoldPct: (t: TeamWithProjection) => string;
+  formatGoldMargin: (t: TeamWithProjection) => string;
   projectedCutLineTeams: TeamWithProjection[];
   nextTwoSwingGames: (id: string) => SwingGame[];
   gameForecasts: {
@@ -4179,6 +4248,7 @@ function ModelView(props: {
     scheduleDifficultyForTeam: _sd,
     teamPathNote,
     formatGoldPct,
+    formatGoldMargin,
     projectedCutLineTeams,
     nextTwoSwingGames,
     gameForecasts,
@@ -4484,7 +4554,12 @@ function ModelView(props: {
                           #{range.best}–#{range.worst}
                         </td>
                         <td className="px-4 py-4 text-center font-black">{team.projectedRecord}</td>
-                        <td className="px-4 py-4 text-center font-black">{formatGoldPct(team)}</td>
+                        <td className="px-4 py-4 text-center font-black">
+                          <div>{formatGoldPct(team)}</div>
+                          <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                            {formatGoldMargin(team)}
+                          </div>
+                        </td>
                         <td
                           className={`px-4 py-4 text-center font-black ${
                             team.projectedRunDiff > 0
@@ -4572,6 +4647,9 @@ function ModelView(props: {
                     </div>
                     <span className="text-right text-sm font-black text-slate-950 dark:text-slate-100">
                       {formatGoldPct(team)}
+                      <span className="block text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                        {formatGoldMargin(team)}
+                      </span>
                     </span>
                   </li>
                 );
@@ -4669,6 +4747,9 @@ function ModelView(props: {
                       <div className="text-slate-500 dark:text-slate-400">Gold</div>
                       <div className="mt-1 text-slate-950 dark:text-slate-100">
                         {formatGoldPct(team)}
+                      </div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                        {formatGoldMargin(team)}
                       </div>
                     </div>
                     <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">

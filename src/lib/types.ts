@@ -71,6 +71,7 @@ export type TeamWithProjection = Team & {
   projectedRecord: string;
   projectedRunDiff: number;
   goldPct: number;
+  goldPctMargin?: number;
   goldTrend: number[];
   goldStatus: GoldStatus;
   maxPoints: number;
