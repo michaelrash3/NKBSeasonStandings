@@ -11,6 +11,26 @@ export type SharedSnapshot = {
 export type ShareUiState = { view?: ActiveShareView; teamId?: string };
 export const MAX_SHARE_URL_PAYLOAD = 7000;
 
+type CompactTeam = [id: string, name: string];
+type CompactMatchup = [id: string, date: string, away: string, home: string];
+type CompactGameLog = [
+  awayRuns: string,
+  awayHits: string,
+  awayK: string,
+  homeRuns: string,
+  homeHits: string,
+  homeK: string,
+  innings: string,
+  isFinal?: 1,
+];
+type CompactSnapshot = {
+  v: 2;
+  t: CompactTeam[];
+  m: CompactMatchup[];
+  l: Record<string, CompactGameLog>;
+  s: Settings;
+};
+
 const SHARE_VIEWS = new Set<ActiveShareView>(["standings", "games", "model", "settings"]);
 
 const bytesToBase64 = (bytes: Uint8Array) => {
@@ -36,14 +56,80 @@ const decodeRaw = (encoded: string) => {
   return new TextDecoder().decode(base64ToBytes(full));
 };
 
+const compactSnapshot = (snapshot: SharedSnapshot): CompactSnapshot => ({
+  v: 2,
+  t: snapshot.teams.map((team) => [team.id, team.name]),
+  m: snapshot.matchups.map((matchup) => [matchup.id, matchup.date, matchup.away, matchup.home]),
+  l: Object.fromEntries(
+    Object.entries(snapshot.logs).map(([id, log]) => [
+      id,
+      [
+        log.awayRuns,
+        log.awayHits,
+        log.awayK,
+        log.homeRuns,
+        log.homeHits,
+        log.homeK,
+        log.innings,
+        log.isFinal ? 1 : undefined,
+      ].filter((value, index) => index < 7 || value !== undefined) as CompactGameLog,
+    ])
+  ),
+  s: snapshot.settings,
+});
+
+const expandCompactSnapshot = (parsed: CompactSnapshot): SharedSnapshot | null => {
+  if (!Array.isArray(parsed.t) || !Array.isArray(parsed.m) || !isRecord(parsed.l)) return null;
+  const teams = parsed.t.map((team) => ({
+    id: String(team[0] ?? ""),
+    name: String(team[1] ?? ""),
+  }));
+  const matchups = parsed.m.map((matchup) => ({
+    id: String(matchup[0] ?? ""),
+    date: String(matchup[1] ?? ""),
+    away: String(matchup[2] ?? ""),
+    home: String(matchup[3] ?? ""),
+  }));
+  const logs = Object.fromEntries(
+    Object.entries(parsed.l).map(([id, value]) => {
+      const log = Array.isArray(value) ? value : [];
+      return [
+        id,
+        {
+          awayRuns: String(log[0] ?? ""),
+          awayHits: String(log[1] ?? ""),
+          awayK: String(log[2] ?? ""),
+          homeRuns: String(log[3] ?? ""),
+          homeHits: String(log[4] ?? ""),
+          homeK: String(log[5] ?? ""),
+          innings: String(log[6] ?? "6"),
+          isFinal: log[7] === 1,
+        },
+      ];
+    })
+  );
+  const settings = coerceSettings(parsed.s);
+  const coercedTeams = coerceTeams(teams);
+  const coercedMatchups = coerceMatchups(matchups, coercedTeams);
+  return {
+    v: 1,
+    teams: coercedTeams,
+    matchups: coercedMatchups,
+    logs: coerceLogs(logs, coercedMatchups, settings),
+    settings,
+  };
+};
+
 export const encodeSnapshot = (snapshot: SharedSnapshot): string =>
-  encodeRaw(JSON.stringify(snapshot));
+  encodeRaw(JSON.stringify(compactSnapshot(snapshot)));
 
 export const decodeSnapshot = (encoded: string): SharedSnapshot | null => {
   try {
     if (!encoded || encoded.length > MAX_SHARE_URL_PAYLOAD) return null;
     const parsed = JSON.parse(decodeRaw(encoded)) as unknown;
-    if (!isRecord(parsed) || parsed.v !== 1) return null;
+    if (!isRecord(parsed)) return null;
+    if (parsed.v === 2) return expandCompactSnapshot(parsed as CompactSnapshot);
+    if (parsed.v !== 1) return null;
     if (!Array.isArray(parsed.teams) || !Array.isArray(parsed.matchups) || !isRecord(parsed.logs))
       return null;
     const settings = coerceSettings(parsed.settings);
