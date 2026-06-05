@@ -169,6 +169,127 @@ type StatRankings = {
   metrics: StatRankingMetric[];
 };
 
+type DesignFlowAction = {
+  label: string;
+  onClick?: () => void;
+  tone?: "primary" | "dark" | "ghost";
+  file?: {
+    accept: string;
+    ariaLabel: string;
+    onChange: (file: File) => void;
+  };
+};
+
+type DesignFlowStep = {
+  eyebrow: string;
+  title: string;
+  body: string;
+  meta: string;
+  tone: "blue" | "amber" | "emerald" | "red";
+  actions?: DesignFlowAction[];
+};
+
+const flowToneClasses: Record<DesignFlowStep["tone"], string> = {
+  blue: "from-blue-600/16 via-blue-500/8 to-transparent text-blue-700 ring-blue-200 dark:from-blue-500/20 dark:text-blue-200 dark:ring-blue-900/70",
+  amber:
+    "from-amber-500/18 via-amber-400/8 to-transparent text-amber-700 ring-amber-200 dark:from-amber-500/20 dark:text-amber-200 dark:ring-amber-900/70",
+  emerald:
+    "from-emerald-500/16 via-emerald-400/8 to-transparent text-emerald-700 ring-emerald-200 dark:from-emerald-500/20 dark:text-emerald-200 dark:ring-emerald-900/70",
+  red: "from-red-500/16 via-red-400/8 to-transparent text-red-700 ring-red-200 dark:from-red-500/20 dark:text-red-200 dark:ring-red-900/70",
+};
+
+const flowButtonClass = (tone: DesignFlowAction["tone"] = "ghost") =>
+  tone === "primary"
+    ? buttonClasses.primary
+    : tone === "dark"
+      ? buttonClasses.dark
+      : buttonClasses.ghost;
+
+function DesignFlowPanel({
+  title,
+  subtitle,
+  steps,
+}: {
+  title: string;
+  subtitle: string;
+  steps: DesignFlowStep[];
+}) {
+  return (
+    <section className={`${card} overflow-hidden`} aria-label={title}>
+      <div className="relative isolate overflow-hidden bg-slate-950 px-6 py-6 text-white dark:bg-slate-950">
+        <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.35),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(37,99,235,0.3),_transparent_38%)]" />
+        <div className="text-xs font-black uppercase tracking-[0.28em] text-amber-200">
+          League design flow
+        </div>
+        <h2 className="mt-2 text-2xl font-black tracking-tight text-white">{title}</h2>
+        <p className="mt-2 max-w-3xl text-sm font-bold leading-6 text-slate-200">{subtitle}</p>
+      </div>
+      <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 xl:grid-cols-4">
+        {steps.map((step, index) => (
+          <article
+            key={step.title}
+            className={`rounded-3xl bg-gradient-to-br ${flowToneClasses[step.tone]} p-4 ring-1`}
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-sm font-black text-slate-950 shadow-sm ring-1 ring-white/70 dark:bg-slate-950 dark:text-white dark:ring-white/10">
+                {index + 1}
+              </div>
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">
+                  {step.eyebrow}
+                </div>
+                <h3 className="mt-1 text-base font-black tracking-tight text-slate-950 dark:text-white">
+                  {step.title}
+                </h3>
+              </div>
+            </div>
+            <p className="mt-4 text-sm font-bold leading-6 text-slate-600 dark:text-slate-300">
+              {step.body}
+            </p>
+            <div className="mt-4 rounded-2xl bg-white/75 px-3 py-2 text-xs font-black uppercase tracking-wide text-slate-600 ring-1 ring-white/80 dark:bg-slate-950/55 dark:text-slate-300 dark:ring-white/10">
+              {step.meta}
+            </div>
+            {step.actions && step.actions.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {step.actions.map((action) =>
+                  action.file ? (
+                    <label
+                      key={action.label}
+                      className={`inline-flex cursor-pointer ${flowButtonClass(action.tone)}`}
+                    >
+                      {action.label}
+                      <input
+                        type="file"
+                        accept={action.file.accept}
+                        className="hidden"
+                        aria-label={action.file.ariaLabel}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file) action.file?.onChange(file);
+                          event.currentTarget.value = "";
+                        }}
+                      />
+                    </label>
+                  ) : (
+                    <button
+                      key={action.label}
+                      type="button"
+                      onClick={action.onClick}
+                      className={flowButtonClass(action.tone)}
+                    >
+                      {action.label}
+                    </button>
+                  )
+                )}
+              </div>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 type RankSnapshotEntry = Team & {
   rank: number;
   projectedRank: number;
@@ -318,6 +439,126 @@ const VIEW_LABELS: Record<ActiveView, string> = {
 };
 
 const VIEW_ORDER: ActiveView[] = ["standings", "teamStats", "games", "model", "settings"];
+
+type SiteVisualHeroProps = {
+  activeView: ActiveView;
+  seasonLabel: string;
+  teamsCount: number;
+  finalCount: number;
+  totalGames: number;
+  goldCutoff: number;
+};
+
+const viewHeroCopy: Record<ActiveView, { eyebrow: string; title: string; body: string }> = {
+  standings: {
+    eyebrow: "Race board",
+    title: "Every seed movement gets a spotlight.",
+    body: "The standings view leads with the league story, then backs it up with cut-line color, projected finish, and weekly momentum.",
+  },
+  teamStats: {
+    eyebrow: "Stat room",
+    title: "Team profiles feel like a broadcast package.",
+    body: "League averages and stat leaders get the same card treatment as the race so performance context is easier to scan.",
+  },
+  games: {
+    eyebrow: "Score desk",
+    title: "Schedule work stays visually guided.",
+    body: "Game cards, filters, and score entry sit inside the same high-contrast design language as the rest of the site.",
+  },
+  model: {
+    eyebrow: "Prediction lab",
+    title: "The model has a stronger stage.",
+    body: "Forecasts, brackets, clinching paths, and swing games are framed as connected visual panels instead of isolated tables.",
+  },
+  settings: {
+    eyebrow: "Control room",
+    title: "League operations stay clear and polished.",
+    body: "Rules, imports, exports, backups, and reset paths now sit under a more visual operating surface.",
+  },
+};
+
+function SiteVisualHero({
+  activeView,
+  seasonLabel,
+  teamsCount,
+  finalCount,
+  totalGames,
+  goldCutoff,
+}: SiteVisualHeroProps) {
+  const copy = viewHeroCopy[activeView];
+  const progress = totalGames > 0 ? Math.round((finalCount / totalGames) * 100) : 0;
+  const heroStats = [
+    { label: "Season", value: seasonLabel },
+    { label: "Teams", value: teamsCount.toString() },
+    { label: "Gold line", value: `Top ${goldCutoff}` },
+    { label: "Complete", value: `${progress}%` },
+  ];
+
+  return (
+    <section
+      className={`${card} mb-6 overflow-hidden`}
+      aria-label={`${VIEW_LABELS[activeView]} visual overview`}
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-[1.45fr_0.55fr]">
+        <div className="relative isolate overflow-hidden bg-gradient-to-br from-slate-950 via-blue-950 to-amber-900 p-6 text-white sm:p-7">
+          <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_18%,_rgba(251,191,36,0.34),_transparent_26%),radial-gradient(circle_at_88%_20%,_rgba(59,130,246,0.32),_transparent_30%),linear-gradient(135deg,_rgba(255,255,255,0.12)_0_1px,_transparent_1px_12px)]" />
+          <div className="inline-flex rounded-full bg-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-amber-100 ring-1 ring-white/15 backdrop-blur">
+            {copy.eyebrow}
+          </div>
+          <h2 className="mt-4 max-w-3xl text-2xl font-black tracking-tight text-white sm:text-3xl">
+            {copy.title}
+          </h2>
+          <p className="mt-3 max-w-3xl text-sm font-bold leading-6 text-slate-200 sm:text-base">
+            {copy.body}
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {heroStats.map((stat) => (
+              <div
+                key={stat.label}
+                className="rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/15 backdrop-blur"
+              >
+                <div className="text-[10px] font-black uppercase tracking-wide text-slate-300">
+                  {stat.label}
+                </div>
+                <div className="mt-1 text-sm font-black text-white">{stat.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="bg-white/85 p-5 dark:bg-slate-900/85">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/70">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
+                  Visual pulse
+                </div>
+                <div className="mt-1 text-lg font-black text-slate-950 dark:text-white">
+                  {VIEW_LABELS[activeView]}
+                </div>
+              </div>
+              <span className={pill("amber")}>{progress}% played</span>
+            </div>
+            <div className="mt-5 h-3 overflow-hidden rounded-full bg-white ring-1 ring-slate-200 dark:bg-slate-950 dark:ring-slate-700">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-red-500 via-amber-400 to-emerald-400"
+                style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+              />
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2 text-center text-xs font-black text-slate-600 dark:text-slate-300">
+              <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200 dark:bg-slate-950 dark:ring-slate-700">
+                {finalCount} final
+              </div>
+              <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200 dark:bg-slate-950 dark:ring-slate-700">
+                {Math.max(0, totalGames - finalCount)} open
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 const TIEBREAKER_FACTORS: TiebreakerFactor[] = ["headToHead", "runsAgainst", "runDifferential"];
 type TiebreakerSelectValue = TiebreakerFactor | "none";
 
@@ -3507,6 +3748,16 @@ This will replace current season data and save an undo snapshot.`,
           role="tabpanel"
           aria-labelledby={`tab-${activeView}`}
         >
+          {teams.length > 0 && (
+            <SiteVisualHero
+              activeView={activeView}
+              seasonLabel={settings.seasonLabel}
+              teamsCount={teams.length}
+              finalCount={finalCount}
+              totalGames={totalGamesCount}
+              goldCutoff={goldCutoff}
+            />
+          )}
           {teams.length === 0 ? (
             <EmptyState
               importCSV={importCSV}
@@ -3763,93 +4014,150 @@ function EmptyState({
   teams: TeamBase[];
   loadDemoSeason: () => void;
 }) {
-  return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_420px]">
-      <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 shadow-sm">
-        <h2 className="text-2xl font-black tracking-tight">Start a Season</h2>
-        <div className="mt-6 flex flex-wrap gap-3">
-          <label className={`inline-flex cursor-pointer ${buttonClasses.primary}`}>
-            Import CSV
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              aria-label="Import schedule CSV"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) importCSV(file);
-                event.currentTarget.value = "";
-              }}
-            />
-          </label>
-          <button onClick={createSeasonFromTeamList} className={buttonClasses.dark}>
-            Create Blank Schedule
-          </button>
-          <button onClick={downloadRoundRobinCSV} className={buttonClasses.ghost}>
-            Download Blank CSV
-          </button>
-          <button onClick={loadDemoSeason} className={buttonClasses.ghost}>
-            Load Demo Season
-          </button>
-        </div>
+  const kickoffFlow: DesignFlowStep[] = [
+    {
+      eyebrow: "Load",
+      title: "Bring in the league file",
+      body: "Start with the official CSV when you have dates, teams, and scores already organized.",
+      meta: "Fastest path for real schedules",
+      tone: "blue",
+      actions: [
+        {
+          label: "Import CSV",
+          tone: "primary",
+          file: {
+            accept: ".csv,text/csv",
+            ariaLabel: "Import schedule CSV",
+            onChange: importCSV,
+          },
+        },
+      ],
+    },
+    {
+      eyebrow: "Build",
+      title: "Create from team names",
+      body: "Paste the clubs once and generate a blank round-robin shell for scorekeeping.",
+      meta: "Great for a clean new season",
+      tone: "amber",
+      actions: [
+        { label: "Create Schedule", tone: "dark", onClick: createSeasonFromTeamList },
+        { label: "Blank CSV", onClick: downloadRoundRobinCSV },
+      ],
+    },
+    {
+      eyebrow: "Review",
+      title: "Check the command center",
+      body: "Use standings, team stats, and the schedule board to confirm the season looks right.",
+      meta: "Validates teams, games, and scores",
+      tone: "emerald",
+    },
+    {
+      eyebrow: "Practice",
+      title: "Explore with demo data",
+      body: "Load a sample season to see the model, cut line, and recap flow before importing yours.",
+      meta: "Safe sandbox mode",
+      tone: "red",
+      actions: [{ label: "Load Demo", onClick: loadDemoSeason }],
+    },
+  ];
 
-        <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-5">
+  return (
+    <div className="grid grid-cols-1 gap-6">
+      <DesignFlowPanel
+        title="Launch the season with a guided flow"
+        subtitle="A visual setup lane keeps the first import, roster build, validation, and demo rehearsal in one place before the standings go live."
+        steps={kickoffFlow}
+      />
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_420px]">
+        <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <h2 className="text-2xl font-black tracking-tight text-slate-950 dark:text-slate-100">
+            Start a Season
+          </h2>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <label className={`inline-flex cursor-pointer ${buttonClasses.primary}`}>
+              Import CSV
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                aria-label="Import schedule CSV"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) importCSV(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+            <button onClick={createSeasonFromTeamList} className={buttonClasses.dark}>
+              Create Blank Schedule
+            </button>
+            <button onClick={downloadRoundRobinCSV} className={buttonClasses.ghost}>
+              Download Blank CSV
+            </button>
+            <button onClick={loadDemoSeason} className={buttonClasses.ghost}>
+              Load Demo Season
+            </button>
+          </div>
+
+          <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800/60">
+            <h3 className="text-lg font-black tracking-tight text-slate-950 dark:text-slate-100">
+              New Season Builder
+            </h3>
+            <label className="sr-only" htmlFor="season-builder-textarea">
+              Team list
+            </label>
+            <textarea
+              id="season-builder-textarea"
+              value={seasonBuilderText}
+              onChange={(event) => setSeasonBuilderText(event.target.value)}
+              placeholder={
+                teams.length
+                  ? teams.map((team) => displayName(team.name)).join("\n")
+                  : "Stallions\nGriddy\nTrash Pandas"
+              }
+              className="mt-4 h-44 w-full resize-none rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:border-slate-950 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-white"
+            />
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                onClick={createSeasonFromTeamList}
+                className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-slate-800"
+              >
+                Create Schedule
+              </button>
+              <button
+                onClick={downloadRoundRobinCSV}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+              >
+                Download Blank CSV
+              </button>
+              <button
+                onClick={() =>
+                  setSeasonBuilderText(teams.map((team) => displayName(team.name)).join("\n"))
+                }
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+              >
+                Use Current Teams
+              </button>
+            </div>
+          </div>
+        </div>
+        <aside className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <h3 className="text-lg font-black tracking-tight text-slate-950 dark:text-slate-100">
-            New Season Builder
+            Team List
           </h3>
-          <label className="sr-only" htmlFor="season-builder-textarea">
+          <label className="sr-only" htmlFor="team-list-textarea">
             Team list
           </label>
           <textarea
-            id="season-builder-textarea"
+            id="team-list-textarea"
             value={seasonBuilderText}
             onChange={(event) => setSeasonBuilderText(event.target.value)}
-            placeholder={
-              teams.length
-                ? teams.map((team) => displayName(team.name)).join("\n")
-                : "Stallions\nGriddy\nTrash Pandas"
-            }
-            className="mt-4 h-44 w-full resize-none rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:border-slate-950 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-white"
+            placeholder={"Stallions\nGriddy\nTrash Pandas\nChaos"}
+            className="mt-4 h-64 w-full resize-none rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:border-slate-950 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-white"
           />
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button
-              onClick={createSeasonFromTeamList}
-              className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-slate-800"
-            >
-              Create Schedule
-            </button>
-            <button
-              onClick={downloadRoundRobinCSV}
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
-            >
-              Download Blank CSV
-            </button>
-            <button
-              onClick={() =>
-                setSeasonBuilderText(teams.map((team) => displayName(team.name)).join("\n"))
-              }
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
-            >
-              Use Current Teams
-            </button>
-          </div>
-        </div>
+        </aside>
       </div>
-      <aside className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 className="text-lg font-black tracking-tight text-slate-950 dark:text-slate-100">
-          Team List
-        </h3>
-        <label className="sr-only" htmlFor="team-list-textarea">
-          Team list
-        </label>
-        <textarea
-          id="team-list-textarea"
-          value={seasonBuilderText}
-          onChange={(event) => setSeasonBuilderText(event.target.value)}
-          placeholder={"Stallions\nGriddy\nTrash Pandas\nChaos"}
-          className="mt-4 h-64 w-full resize-none rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:border-slate-950 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-white"
-        />
-      </aside>
     </div>
   );
 }
@@ -4939,8 +5247,72 @@ function SettingsView({
     });
   };
 
+  const settingsFlow: DesignFlowStep[] = [
+    {
+      eyebrow: "Rules",
+      title: "Set the season contract",
+      body: "Tune the label, gold cutoff, points, season length, model aggression, and tie-break order before results get messy.",
+      meta: `${teamsCount} teams · Top ${Math.min(settings.goldCutoff, Math.max(1, teamsCount))} gold line`,
+      tone: "blue",
+    },
+    {
+      eyebrow: "Data",
+      title: "Move season files safely",
+      body: "Import CSVs or backups, then export the same source of truth when you need to hand off records.",
+      meta: "CSV for schedules · JSON for full backups",
+      tone: "amber",
+      actions: [
+        {
+          label: "Import CSV",
+          tone: "primary",
+          file: {
+            accept: ".csv,text/csv",
+            ariaLabel: "Import schedule CSV",
+            onChange: importCSV,
+          },
+        },
+        {
+          label: "Import Backup",
+          file: {
+            accept: ".json,application/json",
+            ariaLabel: "Import backup JSON",
+            onChange: importBackup,
+          },
+        },
+      ],
+    },
+    {
+      eyebrow: "Publish",
+      title: "Package the league room",
+      body: "Export clean score sheets or a restorable backup before sending updates to coaches and parents.",
+      meta: "Designed for weekly league updates",
+      tone: "emerald",
+      actions: [
+        { label: "Export CSV", tone: "dark", onClick: exportCSV },
+        { label: "Backup JSON", onClick: exportBackup },
+      ],
+    },
+    {
+      eyebrow: "Reset",
+      title: "Rehearse or restart",
+      body: "Load demo data for walkthroughs, or reset only when you are ready to clear the active season.",
+      meta: "Reset stays behind confirmation",
+      tone: "red",
+      actions: [
+        { label: "Load Demo", onClick: loadDemoSeason },
+        { label: "Reset Season", onClick: resetSeason },
+      ],
+    },
+  ];
+
   return (
     <section className="grid grid-cols-1 gap-6">
+      <DesignFlowPanel
+        title="League operating flow"
+        subtitle="The settings screen now reads like a control room: define the rules, move data, publish a clean snapshot, and rehearse safely without hunting through separate panels."
+        steps={settingsFlow}
+      />
+
       <div className={`${card} p-6`}>
         <h2 className="text-2xl font-black tracking-tight text-slate-950 dark:text-slate-100">
           Settings
