@@ -37,6 +37,7 @@ import {
   sundayEndingWeekKey,
 } from "./lib/date";
 import { displayName, recordText, teamAbbr } from "./lib/format";
+import { generateGeminiRecap } from "./lib/gemini";
 import { summarizeCsvImportIssues } from "./lib/importReport";
 import { buildSeasonImportPreview, formatSeasonImportPreview } from "./lib/importPreview";
 import { parseScheduleCsvImport } from "./lib/scheduleCsvImport";
@@ -71,12 +72,14 @@ import {
 } from "./lib/sim";
 import {
   loadBracketLogs,
+  loadGeminiApiKey,
   loadLogs,
   loadMatchups,
   loadSettings,
   loadTeams,
   readUndoSnapshot,
   saveBracketLogs,
+  saveGeminiApiKey,
   saveLogs,
   saveMatchups,
   saveSettings,
@@ -122,6 +125,16 @@ type ConfirmState = {
 type SaveStatus =
   | { state: "saved"; label: string; timestamp: number }
   | { state: "error"; label: string; timestamp: number };
+
+type LastImpact = {
+  title: string;
+  scores: string[];
+  messages: string[];
+  recapItems: RecapItem[];
+  aiStory?: string;
+  aiStatus?: "idle" | "loading" | "error";
+  aiError?: string;
+};
 
 type TeamSplitLine = {
   label: string;
@@ -1299,6 +1312,7 @@ export default function App() {
   const deferredLogs = useDeferredValue(logs);
   const [bracketLogs, setBracketLogs] = useState<Record<string, GameLog>>(() => loadBracketLogs());
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
+  const [geminiApiKey, setGeminiApiKey] = useState(() => loadGeminiApiKey());
 
   const [newDate, setNewDate] = useState("");
   const [newAway, setNewAway] = useState("");
@@ -1324,12 +1338,7 @@ export default function App() {
       window.removeEventListener("offline", onOffline);
     };
   }, []);
-  const [lastImpact, setLastImpact] = useState<{
-    title: string;
-    scores: string[];
-    messages: string[];
-    recapItems: RecapItem[];
-  } | null>(null);
+  const [lastImpact, setLastImpact] = useState<LastImpact | null>(null);
   const [scoreboardTeamFilter, setScoreboardTeamFilter] = useState("ALL");
   const [scoreboardPredictions, setScoreboardPredictions] = useState<
     Map<string, ScoreboardPrediction>
@@ -1443,6 +1452,14 @@ export default function App() {
   useEffect(() => {
     recordSaveResult(saveSettings(settings), "settings", "Could not save settings (storage full).");
   }, [settings, recordSaveResult]);
+
+  useEffect(() => {
+    recordSaveResult(
+      saveGeminiApiKey(geminiApiKey),
+      "settings",
+      "Could not save Gemini API key (storage full)."
+    );
+  }, [geminiApiKey, recordSaveResult]);
 
   useEffect(() => {
     if (!newAway && teams[0]) setNewAway(teams[0].id);
@@ -3205,6 +3222,44 @@ This will replace current season data and save an undo snapshot.`,
     return recapToStoryBrief(settings.seasonLabel, lastImpact.recapItems);
   }, [lastImpact, settings.seasonLabel]);
 
+  const generateAiStory = useCallback(async () => {
+    if (!lastImpact || lastImpact.recapItems.length === 0) return;
+    if (!geminiApiKey.trim()) {
+      setActiveView("settings");
+      showToast("Add your Gemini API key in Settings to generate an AI story.", { tone: "error" });
+      return;
+    }
+
+    const title = lastImpact.title;
+    const scores = lastImpact.scores;
+    const recapItems = lastImpact.recapItems;
+    setLastImpact((prev) =>
+      prev && prev.title === title ? { ...prev, aiStatus: "loading", aiError: undefined } : prev
+    );
+
+    try {
+      const aiStory = await generateGeminiRecap({
+        apiKey: geminiApiKey,
+        seasonLabel: settings.seasonLabel,
+        title,
+        scores,
+        items: recapItems,
+      });
+      setLastImpact((prev) =>
+        prev && prev.title === title
+          ? { ...prev, aiStory, aiStatus: "idle", aiError: undefined }
+          : prev
+      );
+      showToast("Gemini story generated.", { tone: "success" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Gemini could not generate a story.";
+      setLastImpact((prev) =>
+        prev && prev.title === title ? { ...prev, aiStatus: "error", aiError: message } : prev
+      );
+      showToast(message, { tone: "error" });
+    }
+  }, [geminiApiKey, lastImpact, settings.seasonLabel, showToast]);
+
   // ---------- Share + URL snapshot ----------
 
   const sharedHandledRef = useRef(false);
@@ -3542,14 +3597,20 @@ This will replace current season data and save an undo snapshot.`,
               }}
               copyStory={async () => {
                 if (!lastImpact) return;
-                const story = recapToStoryBrief(settings.seasonLabel, lastImpact.recapItems);
+                const story =
+                  lastImpact.aiStory ||
+                  recapToStoryBrief(settings.seasonLabel, lastImpact.recapItems);
                 try {
                   await navigator.clipboard.writeText(story);
-                  showToast("Story copied.", { tone: "success" });
+                  showToast(lastImpact.aiStory ? "AI story copied." : "Story copied.", {
+                    tone: "success",
+                  });
                 } catch {
                   showToast("Could not copy story to clipboard.", { tone: "error" });
                 }
               }}
+              generateAiStory={generateAiStory}
+              hasGeminiApiKey={geminiApiKey.trim().length > 0}
               dashboardRows={dashboardRows}
               weeklyStory={weeklyStory}
               currentSosRanks={currentSosRanks}
@@ -3622,6 +3683,8 @@ This will replace current season data and save an undo snapshot.`,
               exportBackup={exportBackup}
               resetSeason={resetSeason}
               loadDemoSeason={loadDemoSeason}
+              geminiApiKey={geminiApiKey}
+              setGeminiApiKey={setGeminiApiKey}
             />
           ) : (
             <GamesView
@@ -3939,6 +4002,8 @@ function StandingsView({
   dismissImpact,
   copyRecap,
   copyStory,
+  generateAiStory,
+  hasGeminiApiKey,
   dashboardRows,
   weeklyStory,
   currentSosRanks,
@@ -3953,15 +4018,12 @@ function StandingsView({
   totalGames: number;
   goldCutoff: number;
   latestCompletedDate: string;
-  lastImpact: {
-    title: string;
-    scores: string[];
-    messages: string[];
-    recapItems: RecapItem[];
-  } | null;
+  lastImpact: LastImpact | null;
   dismissImpact: () => void;
   copyRecap: () => void;
   copyStory: () => void;
+  generateAiStory: () => void;
+  hasGeminiApiKey: boolean;
   dashboardRows: TeamWithProjection[];
   weeklyStory: string;
   currentSosRanks: Record<string, number>;
@@ -3993,6 +4055,21 @@ function StandingsView({
                 </div>
               </div>
               <div className="flex gap-2">
+                {lastImpact.recapItems.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={generateAiStory}
+                    disabled={lastImpact.aiStatus === "loading"}
+                    title={
+                      hasGeminiApiKey
+                        ? "Generate a conversational Gemini recap"
+                        : "Add a Gemini API key in Settings first"
+                    }
+                    className="rounded-full bg-violet-600 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-white shadow-sm hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {lastImpact.aiStatus === "loading" ? "Thinking…" : "AI Story"}
+                  </button>
+                )}
                 {lastImpact.recapItems.length > 0 && (
                   <button
                     type="button"
@@ -4039,12 +4116,16 @@ function StandingsView({
             )}
             {lastImpact.recapItems.length > 0 ? (
               <>
-                {weeklyStory && (
-                  <div className="mb-3 rounded-2xl bg-white p-3 text-sm font-semibold leading-6 text-slate-700 shadow-sm ring-1 ring-blue-100 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700">
+                {(lastImpact.aiStory || weeklyStory || lastImpact.aiError) && (
+                  <div className="mb-3 whitespace-pre-line rounded-2xl bg-white p-3 text-sm font-semibold leading-6 text-slate-700 shadow-sm ring-1 ring-blue-100 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700">
                     <div className="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                      Weekly League Story
+                      {lastImpact.aiStory ? "Gemini League Story" : "Weekly League Story"}
                     </div>
-                    {weeklyStory}
+                    {lastImpact.aiError && !lastImpact.aiStory ? (
+                      <span className="text-red-700 dark:text-red-300">{lastImpact.aiError}</span>
+                    ) : (
+                      lastImpact.aiStory || weeklyStory
+                    )}
                   </div>
                 )}
                 <ul className="space-y-2 text-xs font-black text-blue-800 dark:text-blue-300">
@@ -5180,6 +5261,8 @@ function SettingsView({
   exportBackup,
   resetSeason,
   loadDemoSeason,
+  geminiApiKey,
+  setGeminiApiKey,
 }: {
   settings: Settings;
   setSettings: React.Dispatch<React.SetStateAction<Settings>>;
@@ -5190,6 +5273,8 @@ function SettingsView({
   exportBackup: () => void;
   resetSeason: () => void;
   loadDemoSeason: () => void;
+  geminiApiKey: string;
+  setGeminiApiKey: React.Dispatch<React.SetStateAction<string>>;
 }) {
   const seasonId = useId();
   const cutoffId = useId();
@@ -5198,6 +5283,7 @@ function SettingsView({
   const regularSeasonGamesId = useId();
   const aggrId = useId();
   const recapId = useId();
+  const geminiKeyId = useId();
   const tiebreakerId = useId();
   const updateTiebreaker = (index: number, value: TiebreakerSelectValue) => {
     setSettings((prev) => {
@@ -5329,6 +5415,22 @@ function SettingsView({
               <option value="date">Per Date</option>
               <option value="week">Per Week (ending Sunday)</option>
             </select>
+          </label>
+          <label htmlFor={geminiKeyId} className="block md:col-span-2">
+            <span className="text-sm font-black text-slate-700">Gemini API Key</span>
+            <input
+              id={geminiKeyId}
+              type="password"
+              value={geminiApiKey}
+              onChange={(event) => setGeminiApiKey(event.target.value)}
+              placeholder="Paste a Google AI Studio API key to enable AI Story"
+              autoComplete="off"
+              className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-950 outline-none focus:border-slate-950 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-white"
+            />
+            <p className="mt-2 text-xs font-bold leading-5 text-slate-500 dark:text-slate-400">
+              Stored only in this browser and used for the optional AI Story button. The
+              deterministic recap still works without it.
+            </p>
           </label>
           <fieldset
             className="rounded-2xl border border-slate-300 p-4 dark:border-slate-600 md:col-span-2"
