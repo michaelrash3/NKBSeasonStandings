@@ -86,6 +86,8 @@ export type RecapItem = {
     | "crossed-cut-down"
     | "rank-change"
     | "gold-shift"
+    | "dependency-chain"
+    | "bubble-watch"
     | "summary";
   text: string;
   impactScore?: number;
@@ -103,6 +105,10 @@ const recapImpactScore = (kind: RecapItem["kind"], text: string) => {
     case "biggest-mover":
     case "biggest-faller":
       return 72;
+    case "bubble-watch":
+      return 70;
+    case "dependency-chain":
+      return 66;
     case "rank-change":
       return text.includes("#") ? 58 : 45;
     case "gold-shift":
@@ -191,14 +197,30 @@ export const weeklyRecap = ({
     if (movedNames.size > 0) {
       const movedList = Array.from(movedNames).slice(0, 6).join(", ");
       items.push({
-        kind: "summary",
-        text: `The board got shuffled for ${movedList} after those finals.`,
+        kind: "dependency-chain",
+        text: `Dependency chain: those finals tugged the standings for ${movedList}.`,
         why: [
           "Finalized results changed standings order for multiple teams.",
-          "Cut-line pressure can move teams not playing head-to-head.",
+          "Cut-line pressure can move teams through opponent and competitor results, not just their own games.",
         ],
       });
     }
+  }
+
+  const bubbleTeams = after
+    .filter((team) => team.rank >= Math.max(1, cutoff - 1) && team.rank <= cutoff + 2)
+    .sort((a, b) => a.rank - b.rank);
+  const finalGold = bubbleTeams.find((team) => team.rank === cutoff);
+  const firstOut = bubbleTeams.find((team) => team.rank === cutoff + 1);
+  if (bubbleTeams.length >= 2 && finalGold && firstOut) {
+    items.push({
+      kind: "bubble-watch",
+      text: `Bubble watch: ${displayName(finalGold.name)} hold the final Gold slot at #${finalGold.rank} (${Math.round(finalGold.goldPct)}%), with ${displayName(firstOut.name)} first out at #${firstOut.rank} (${Math.round(firstOut.goldPct)}%).`,
+      why: [
+        "The teams nearest the cut line create the clearest league-wide stakes.",
+        "Gold odds show how current standings and remaining dependencies are pulling on the bubble.",
+      ],
+    });
   }
 
   // Pass 1: clinch / elimination / cut-line crossings (highest signal first).
@@ -342,7 +364,12 @@ export const weeklyRecap = ({
   return Array.from(new Map(items.map((item) => [item.text, item])).values())
     .map((item) => ({ ...item, impactScore: recapImpactScore(item.kind, item.text) }))
     .sort((a, b) => (b.impactScore ?? 0) - (a.impactScore ?? 0))
-    .slice(0, 12);
+    .slice(0, 16);
+};
+
+const storyContext = (item: RecapItem) => {
+  const why = item.why?.filter(Boolean).slice(0, 2) ?? [];
+  return why.length ? ` Context: ${why.join(" ")}` : "";
 };
 
 export const recapToStoryBrief = (
@@ -351,11 +378,20 @@ export const recapToStoryBrief = (
   generatedAt = new Date()
 ) => {
   const dateLabel = formatGameDate(`${generatedAt.getMonth() + 1}/${generatedAt.getDate()}`);
-  const top = [...items].sort((a, b) => (b.impactScore ?? 0) - (a.impactScore ?? 0)).slice(0, 3);
+  const top = [...items].sort((a, b) => (b.impactScore ?? 0) - (a.impactScore ?? 0)).slice(0, 5);
+  const [headline, ...beats] = top;
+
+  if (!headline)
+    return `${seasonLabel} League Story — ${dateLabel}\nNo standings-impact items yet.`;
+
   return [
     `${seasonLabel} League Story — ${dateLabel}`,
-    ...top.map((item, i) => `${i + 1}) ${item.text}`),
-  ].join("\n");
+    `Headline: ${headline.text}${storyContext(headline)}`,
+    beats.length ? "Story beats:" : "",
+    ...beats.map((item) => `- ${item.text}${storyContext(item)}`),
+  ]
+    .filter(Boolean)
+    .join("\n");
 };
 
 export const recapToMarkdown = (
