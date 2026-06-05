@@ -136,6 +136,9 @@ type LastImpact = {
   aiError?: string;
 };
 
+const GEMINI_KEY_REQUIRED_MESSAGE =
+  "Add your Gemini API key in Settings so AI can write the league story.";
+
 type TeamSplitLine = {
   label: string;
   games: number;
@@ -1460,6 +1463,15 @@ export default function App() {
       "Could not save Gemini API key (storage full)."
     );
   }, [geminiApiKey, recordSaveResult]);
+
+  useEffect(() => {
+    if (!geminiApiKey.trim()) return;
+    setLastImpact((prev) =>
+      prev?.aiStatus === "error" && prev.aiError === GEMINI_KEY_REQUIRED_MESSAGE
+        ? { ...prev, aiStatus: undefined, aiError: undefined }
+        : prev
+    );
+  }, [geminiApiKey]);
 
   useEffect(() => {
     if (!newAway && teams[0]) setNewAway(teams[0].id);
@@ -3225,8 +3237,15 @@ This will replace current season data and save an undo snapshot.`,
   const generateAiStory = useCallback(async () => {
     if (!lastImpact || lastImpact.recapItems.length === 0) return;
     if (!geminiApiKey.trim()) {
-      setActiveView("settings");
-      showToast("Add your Gemini API key in Settings to generate an AI story.", { tone: "error" });
+      setLastImpact((prev) =>
+        prev
+          ? {
+              ...prev,
+              aiStatus: "error",
+              aiError: GEMINI_KEY_REQUIRED_MESSAGE,
+            }
+          : prev
+      );
       return;
     }
 
@@ -3250,7 +3269,6 @@ This will replace current season data and save an undo snapshot.`,
           ? { ...prev, aiStory, aiStatus: "idle", aiError: undefined }
           : prev
       );
-      showToast("Gemini story generated.", { tone: "success" });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Gemini could not generate a story.";
       setLastImpact((prev) =>
@@ -3259,6 +3277,18 @@ This will replace current season data and save an undo snapshot.`,
       showToast(message, { tone: "error" });
     }
   }, [geminiApiKey, lastImpact, settings.seasonLabel, showToast]);
+
+  useEffect(() => {
+    if (!lastImpact || lastImpact.recapItems.length === 0) return;
+    if (
+      lastImpact.aiStory ||
+      lastImpact.aiStatus === "loading" ||
+      lastImpact.aiStatus === "error"
+    ) {
+      return;
+    }
+    void generateAiStory();
+  }, [generateAiStory, lastImpact]);
 
   // ---------- Share + URL snapshot ----------
 
@@ -3602,15 +3632,13 @@ This will replace current season data and save an undo snapshot.`,
                   recapToStoryBrief(settings.seasonLabel, lastImpact.recapItems);
                 try {
                   await navigator.clipboard.writeText(story);
-                  showToast(lastImpact.aiStory ? "AI story copied." : "Story copied.", {
+                  showToast(lastImpact.aiStory ? "AI story copied." : "Fallback story copied.", {
                     tone: "success",
                   });
                 } catch {
                   showToast("Could not copy story to clipboard.", { tone: "error" });
                 }
               }}
-              generateAiStory={generateAiStory}
-              hasGeminiApiKey={geminiApiKey.trim().length > 0}
               dashboardRows={dashboardRows}
               weeklyStory={weeklyStory}
               currentSosRanks={currentSosRanks}
@@ -4002,8 +4030,6 @@ function StandingsView({
   dismissImpact,
   copyRecap,
   copyStory,
-  generateAiStory,
-  hasGeminiApiKey,
   dashboardRows,
   weeklyStory,
   currentSosRanks,
@@ -4022,8 +4048,6 @@ function StandingsView({
   dismissImpact: () => void;
   copyRecap: () => void;
   copyStory: () => void;
-  generateAiStory: () => void;
-  hasGeminiApiKey: boolean;
   dashboardRows: TeamWithProjection[];
   weeklyStory: string;
   currentSosRanks: Record<string, number>;
@@ -4055,21 +4079,6 @@ function StandingsView({
                 </div>
               </div>
               <div className="flex gap-2">
-                {lastImpact.recapItems.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={generateAiStory}
-                    disabled={lastImpact.aiStatus === "loading"}
-                    title={
-                      hasGeminiApiKey
-                        ? "Generate a conversational Gemini recap"
-                        : "Add a Gemini API key in Settings first"
-                    }
-                    className="rounded-full bg-violet-600 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-white shadow-sm hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {lastImpact.aiStatus === "loading" ? "Thinking…" : "AI Story"}
-                  </button>
-                )}
                 {lastImpact.recapItems.length > 0 && (
                   <button
                     type="button"
@@ -4119,12 +4128,26 @@ function StandingsView({
                 {(lastImpact.aiStory || weeklyStory || lastImpact.aiError) && (
                   <div className="mb-3 whitespace-pre-line rounded-2xl bg-white p-3 text-sm font-semibold leading-6 text-slate-700 shadow-sm ring-1 ring-blue-100 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700">
                     <div className="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                      {lastImpact.aiStory ? "Gemini League Story" : "Weekly League Story"}
+                      Gemini League Story
                     </div>
-                    {lastImpact.aiError && !lastImpact.aiStory ? (
-                      <span className="text-red-700 dark:text-red-300">{lastImpact.aiError}</span>
+                    {lastImpact.aiStory ? (
+                      lastImpact.aiStory
+                    ) : lastImpact.aiStatus === "loading" ? (
+                      "Gemini is drafting the league story…"
+                    ) : lastImpact.aiError ? (
+                      <>
+                        <span className="text-red-700 dark:text-red-300">{lastImpact.aiError}</span>
+                        {weeklyStory && (
+                          <div className="mt-3 border-t border-blue-100 pt-3 dark:border-slate-700">
+                            <div className="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                              Deterministic fallback
+                            </div>
+                            {weeklyStory}
+                          </div>
+                        )}
+                      </>
                     ) : (
-                      lastImpact.aiStory || weeklyStory
+                      "Gemini is queued to draft the league story…"
                     )}
                   </div>
                 )}
@@ -5423,13 +5446,13 @@ function SettingsView({
               type="password"
               value={geminiApiKey}
               onChange={(event) => setGeminiApiKey(event.target.value)}
-              placeholder="Paste a Google AI Studio API key to enable AI Story"
+              placeholder="Paste a Google AI Studio API key for primary AI stories"
               autoComplete="off"
               className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-950 outline-none focus:border-slate-950 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-white"
             />
             <p className="mt-2 text-xs font-bold leading-5 text-slate-500 dark:text-slate-400">
-              Stored only in this browser and used for the optional AI Story button. The
-              deterministic recap still works without it.
+              Stored only in this browser and used as the primary league story writer. The
+              deterministic recap remains as a fallback if Gemini is unavailable.
             </p>
           </label>
           <fieldset
