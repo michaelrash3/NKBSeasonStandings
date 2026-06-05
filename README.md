@@ -28,17 +28,17 @@ Node `>=24` (see `.nvmrc`) for the latest available LTS/current runtime baseline
 
 ## Features
 
-| Area | Highlights |
-| --- | --- |
-| **Standings** | Records, cut-line status, SOS, trends, weekly recap. |
-| **Games** | R/H/K entry, predictions, final toggle, filters, auto re-projection. |
-| **Season Predictor** | Forecast board, bubble watch, cut-line games, game forecasts, trend charts. |
-| **Team drawer** | Team stats, path summary, magic/elimination numbers, swing games, compare view. |
-| **Settings** | Season label, cutoff, points, tiebreaker, aggression. |
-| **Power UX** | Command palette, shortcuts, dark mode, share URL, CSV import/export, undo, onboarding. |
-| **Installable PWA** | Installable via `vite-plugin-pwa` (basic precache). |
-| **A11y** | Dialog semantics, focus management, keyboard nav, labeled inputs. |
-| **Perf** | Worker simulation, debounced updates, memoized lookups/scenarios. |
+| Area                 | Highlights                                                                             |
+| -------------------- | -------------------------------------------------------------------------------------- |
+| **Standings**        | Records, cut-line status, SOS, trends, deterministic league story, weekly recap.       |
+| **Games**            | R/H/K entry, predictions, final toggle, filters, auto re-projection.                   |
+| **Season Predictor** | Forecast board, bubble watch, cut-line games, game forecasts, trend charts.            |
+| **Team drawer**      | Team stats, path summary, magic/elimination numbers, swing games, compare view.        |
+| **Settings**         | Season label, cutoff, points, tiebreaker, recap grouping, aggression.                  |
+| **Power UX**         | Command palette, shortcuts, dark mode, share URL, CSV import/export, undo, onboarding. |
+| **Installable PWA**  | Installable via `vite-plugin-pwa` (basic precache).                                    |
+| **A11y**             | Dialog semantics, focus management, keyboard nav, labeled inputs.                      |
+| **Perf**             | Worker simulation, debounced updates, memoized lookups/scenarios.                      |
 
 ## Architecture
 
@@ -55,7 +55,7 @@ src/
     csv.ts
     sim.ts
     magic.ts
-    insights.ts
+    insights.ts       # deterministic recap + league-story generation
     share.ts
     storage.ts
     backtest.ts
@@ -84,18 +84,20 @@ src/
 
 ## Settings
 
-| Setting | Effect |
-| --- | --- |
-| Season label | Header/export label. |
-| Gold cutoff | Number of teams in Gold Bracket. |
-| Win / Tie points | Standings and math calculations. |
-| Run-diff tiebreaker | Tie ordering behavior. |
-| Model aggression | Prediction weighting profile. |
+| Setting             | Effect                                  |
+| ------------------- | --------------------------------------- |
+| Season label        | Header/export label.                    |
+| Gold cutoff         | Number of teams in Gold Bracket.        |
+| Win / Tie points    | Standings and math calculations.        |
+| Run-diff tiebreaker | Tie ordering behavior.                  |
+| Recap grouping      | Builds stories per game, date, or week. |
+| Model aggression    | Prediction weighting profile.           |
 
 ## Data + persistence
 
 - `league_teams_v1`, `league_matchups_v1`, `league_logs_v1`, `league_settings_v1`
 - `league_undo_snapshot_v1`
+- League stories are generated locally from standings facts; no API key or AI service is required.
 - One-time migration from older `league_*` keys
 - CSV import/export with BOM/formula guard handling
 

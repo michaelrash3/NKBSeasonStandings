@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   pathSummary,
   recapToMarkdown,
+  recapToStoryBrief,
   summarizeStandings,
   weeklyRecap,
   type InsightTeam,
@@ -115,6 +116,40 @@ describe("recapToMarkdown / summarizeStandings", () => {
     expect(md).toContain("# Spring 26 Recap");
     expect(md).toContain("- Aces clinched.");
   });
+
+  it("adds bubble and dependency context to the deterministic league story", () => {
+    const items = weeklyRecap({
+      before: [
+        { id: "A", rank: 4, goldPct: 60, goldStatus: "In" },
+        { id: "B", rank: 5, goldPct: 45, goldStatus: "In" },
+        { id: "C", rank: 6, goldPct: 35, goldStatus: "Alive" },
+      ],
+      after: [
+        { id: "A", rank: 5, goldPct: 52, goldStatus: "In", name: "Aces" },
+        { id: "B", rank: 4, goldPct: 58, goldStatus: "In", name: "Bears" },
+        { id: "C", rank: 6, goldPct: 31, goldStatus: "Alive", name: "Comets" },
+      ],
+      finalsSinceLast: [
+        {
+          game: { id: "g1", date: "2026-05-20", away: "B", home: "A" },
+          awayScore: 8,
+          homeScore: 3,
+          awayName: "Bears",
+          homeName: "Aces",
+        },
+      ],
+      cutoff: 5,
+    });
+
+    const story = recapToStoryBrief("Spring 26", items, new Date("2026-05-21T12:00:00Z"));
+
+    expect(items.some((item) => item.kind === "bubble-watch")).toBe(true);
+    expect(items.some((item) => item.kind === "dependency-chain")).toBe(true);
+    expect(story).toContain("Headline:");
+    expect(story).toContain("Story beats:");
+    expect(story).toContain("Context:");
+  });
+
   it("standings summary marks inside-cutoff teams", () => {
     const text = summarizeStandings(
       "Spring 26",

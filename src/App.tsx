@@ -37,7 +37,6 @@ import {
   sundayEndingWeekKey,
 } from "./lib/date";
 import { displayName, recordText, teamAbbr } from "./lib/format";
-import { generateGeminiRecap } from "./lib/gemini";
 import { summarizeCsvImportIssues } from "./lib/importReport";
 import { buildSeasonImportPreview, formatSeasonImportPreview } from "./lib/importPreview";
 import { parseScheduleCsvImport } from "./lib/scheduleCsvImport";
@@ -72,14 +71,12 @@ import {
 } from "./lib/sim";
 import {
   loadBracketLogs,
-  loadGeminiApiKey,
   loadLogs,
   loadMatchups,
   loadSettings,
   loadTeams,
   readUndoSnapshot,
   saveBracketLogs,
-  saveGeminiApiKey,
   saveLogs,
   saveMatchups,
   saveSettings,
@@ -131,13 +128,7 @@ type LastImpact = {
   scores: string[];
   messages: string[];
   recapItems: RecapItem[];
-  aiStory?: string;
-  aiStatus?: "idle" | "loading" | "error";
-  aiError?: string;
 };
-
-const GEMINI_KEY_REQUIRED_MESSAGE =
-  "Add your Gemini API key in Settings so AI can write the league story.";
 
 type TeamSplitLine = {
   label: string;
@@ -326,13 +317,7 @@ const VIEW_LABELS: Record<ActiveView, string> = {
   settings: "Settings",
 };
 
-const VIEW_ORDER: ActiveView[] = [
-  "standings",
-  "teamStats",
-  "games",
-  "model",
-  "settings",
-];
+const VIEW_ORDER: ActiveView[] = ["standings", "teamStats", "games", "model", "settings"];
 const TIEBREAKER_FACTORS: TiebreakerFactor[] = ["headToHead", "runsAgainst", "runDifferential"];
 type TiebreakerSelectValue = TiebreakerFactor | "none";
 
@@ -1313,7 +1298,6 @@ export default function App() {
   const deferredLogs = useDeferredValue(logs);
   const [bracketLogs, setBracketLogs] = useState<Record<string, GameLog>>(() => loadBracketLogs());
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
-  const [geminiApiKey, setGeminiApiKey] = useState(() => loadGeminiApiKey());
 
   const [newDate, setNewDate] = useState("");
   const [newAway, setNewAway] = useState("");
@@ -1453,23 +1437,6 @@ export default function App() {
   useEffect(() => {
     recordSaveResult(saveSettings(settings), "settings", "Could not save settings (storage full).");
   }, [settings, recordSaveResult]);
-
-  useEffect(() => {
-    recordSaveResult(
-      saveGeminiApiKey(geminiApiKey),
-      "settings",
-      "Could not save Gemini API key (storage full)."
-    );
-  }, [geminiApiKey, recordSaveResult]);
-
-  useEffect(() => {
-    if (!geminiApiKey.trim()) return;
-    setLastImpact((prev) =>
-      prev?.aiStatus === "error" && prev.aiError === GEMINI_KEY_REQUIRED_MESSAGE
-        ? { ...prev, aiStatus: undefined, aiError: undefined }
-        : prev
-    );
-  }, [geminiApiKey]);
 
   useEffect(() => {
     if (!newAway && teams[0]) setNewAway(teams[0].id);
@@ -3231,62 +3198,6 @@ This will replace current season data and save an undo snapshot.`,
     return recapToStoryBrief(settings.seasonLabel, lastImpact.recapItems);
   }, [lastImpact, settings.seasonLabel]);
 
-  const generateAiStory = useCallback(async () => {
-    if (!lastImpact || lastImpact.recapItems.length === 0) return;
-    if (!geminiApiKey.trim()) {
-      setLastImpact((prev) =>
-        prev
-          ? {
-              ...prev,
-              aiStatus: "error",
-              aiError: GEMINI_KEY_REQUIRED_MESSAGE,
-            }
-          : prev
-      );
-      return;
-    }
-
-    const title = lastImpact.title;
-    const scores = lastImpact.scores;
-    const recapItems = lastImpact.recapItems;
-    setLastImpact((prev) =>
-      prev && prev.title === title ? { ...prev, aiStatus: "loading", aiError: undefined } : prev
-    );
-
-    try {
-      const aiStory = await generateGeminiRecap({
-        apiKey: geminiApiKey,
-        seasonLabel: settings.seasonLabel,
-        title,
-        scores,
-        items: recapItems,
-      });
-      setLastImpact((prev) =>
-        prev && prev.title === title
-          ? { ...prev, aiStory, aiStatus: "idle", aiError: undefined }
-          : prev
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Gemini could not generate a story.";
-      setLastImpact((prev) =>
-        prev && prev.title === title ? { ...prev, aiStatus: "error", aiError: message } : prev
-      );
-      showToast(message, { tone: "error" });
-    }
-  }, [geminiApiKey, lastImpact, settings.seasonLabel, showToast]);
-
-  useEffect(() => {
-    if (!lastImpact || lastImpact.recapItems.length === 0) return;
-    if (
-      lastImpact.aiStory ||
-      lastImpact.aiStatus === "loading" ||
-      lastImpact.aiStatus === "error"
-    ) {
-      return;
-    }
-    void generateAiStory();
-  }, [generateAiStory, lastImpact]);
-
   // ---------- Share + URL snapshot ----------
 
   const sharedHandledRef = useRef(false);
@@ -3627,14 +3538,10 @@ This will replace current season data and save an undo snapshot.`,
               }}
               copyStory={async () => {
                 if (!lastImpact) return;
-                const story =
-                  lastImpact.aiStory ||
-                  recapToStoryBrief(settings.seasonLabel, lastImpact.recapItems);
+                const story = recapToStoryBrief(settings.seasonLabel, lastImpact.recapItems);
                 try {
                   await navigator.clipboard.writeText(story);
-                  showToast(lastImpact.aiStory ? "AI story copied." : "Fallback story copied.", {
-                    tone: "success",
-                  });
+                  showToast("League story copied.", { tone: "success" });
                 } catch {
                   showToast("Could not copy story to clipboard.", { tone: "error" });
                 }
@@ -3694,8 +3601,6 @@ This will replace current season data and save an undo snapshot.`,
               exportBackup={exportBackup}
               resetSeason={resetSeason}
               loadDemoSeason={loadDemoSeason}
-              geminiApiKey={geminiApiKey}
-              setGeminiApiKey={setGeminiApiKey}
             />
           ) : (
             <GamesView
@@ -4108,30 +4013,12 @@ function StandingsView({
             )}
             {lastImpact.recapItems.length > 0 ? (
               <>
-                {(lastImpact.aiStory || weeklyStory || lastImpact.aiError) && (
+                {weeklyStory && (
                   <div className="mb-3 whitespace-pre-line rounded-2xl bg-white p-3 text-sm font-semibold leading-6 text-slate-700 shadow-sm ring-1 ring-blue-100 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700">
                     <div className="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                      Gemini League Story
+                      League Story
                     </div>
-                    {lastImpact.aiStory ? (
-                      lastImpact.aiStory
-                    ) : lastImpact.aiStatus === "loading" ? (
-                      "Gemini is drafting the league story…"
-                    ) : lastImpact.aiError ? (
-                      <>
-                        <span className="text-red-700 dark:text-red-300">{lastImpact.aiError}</span>
-                        {weeklyStory && (
-                          <div className="mt-3 border-t border-blue-100 pt-3 dark:border-slate-700">
-                            <div className="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                              Deterministic fallback
-                            </div>
-                            {weeklyStory}
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      "Gemini is queued to draft the league story…"
-                    )}
+                    {weeklyStory}
                   </div>
                 )}
                 <ul className="space-y-2 text-xs font-black text-blue-800 dark:text-blue-300">
@@ -5019,8 +4906,6 @@ function SettingsView({
   exportBackup,
   resetSeason,
   loadDemoSeason,
-  geminiApiKey,
-  setGeminiApiKey,
 }: {
   settings: Settings;
   setSettings: React.Dispatch<React.SetStateAction<Settings>>;
@@ -5031,8 +4916,6 @@ function SettingsView({
   exportBackup: () => void;
   resetSeason: () => void;
   loadDemoSeason: () => void;
-  geminiApiKey: string;
-  setGeminiApiKey: React.Dispatch<React.SetStateAction<string>>;
 }) {
   const seasonId = useId();
   const cutoffId = useId();
@@ -5041,7 +4924,6 @@ function SettingsView({
   const regularSeasonGamesId = useId();
   const aggrId = useId();
   const recapId = useId();
-  const geminiKeyId = useId();
   const tiebreakerId = useId();
   const updateTiebreaker = (index: number, value: TiebreakerSelectValue) => {
     setSettings((prev) => {
@@ -5173,22 +5055,6 @@ function SettingsView({
               <option value="date">Per Date</option>
               <option value="week">Per Week (ending Sunday)</option>
             </select>
-          </label>
-          <label htmlFor={geminiKeyId} className="block md:col-span-2">
-            <span className="text-sm font-black text-slate-700">Gemini API Key</span>
-            <input
-              id={geminiKeyId}
-              type="password"
-              value={geminiApiKey}
-              onChange={(event) => setGeminiApiKey(event.target.value)}
-              placeholder="Paste a Google AI Studio API key for primary AI stories"
-              autoComplete="off"
-              className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-950 outline-none focus:border-slate-950 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-white"
-            />
-            <p className="mt-2 text-xs font-bold leading-5 text-slate-500 dark:text-slate-400">
-              Stored only in this browser and used as the primary league story writer. The
-              deterministic recap remains as a fallback if Gemini is unavailable.
-            </p>
           </label>
           <fieldset
             className="rounded-2xl border border-slate-300 p-4 dark:border-slate-600 md:col-span-2"
