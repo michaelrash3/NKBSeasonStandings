@@ -165,17 +165,17 @@ describe("standingsPoints + rankTeams", () => {
     expect(standingsPoints(team, { winPoints: 3, tiePoints: 1 })).toBe(14);
   });
 
-  it("ranks GameChanger-style standings points before winning percentage", () => {
-    const strongerPct = {
-      ...emptyTeam({ id: "A", name: "9-3 Team" }),
-      w: 9,
-      l: 3,
+  it("ranks GameChanger-style winning percentage with ties as half a win", () => {
+    const higherWinTotal = {
+      ...emptyTeam({ id: "A", name: "10-4 Team" }),
+      w: 10,
+      l: 4,
       t: 0,
-      games: 12,
-      pct: 9 / 12,
+      games: 14,
+      pct: 10 / 14,
       tpi: 1,
     };
-    const morePoints = {
+    const betterPct = {
       ...emptyTeam({ id: "B", name: "8-2-3 Team" }),
       w: 8,
       l: 2,
@@ -185,12 +185,37 @@ describe("standingsPoints + rankTeams", () => {
       tpi: 0,
     };
 
-    const ranked = rankTeams([strongerPct, morePoints], { winPoints: 1, tiePoints: 0.5 });
+    const ranked = rankTeams([higherWinTotal, betterPct], { winPoints: 1, tiePoints: 0.5 });
 
     expect(ranked.map((team) => team.id)).toEqual(["B", "A"]);
-    expect(standingsPoints(morePoints, { winPoints: 1, tiePoints: 0.5 })).toBeGreaterThan(
-      standingsPoints(strongerPct, { winPoints: 1, tiePoints: 0.5 })
+    expect(betterPct.pct).toBeGreaterThan(higherWinTotal.pct);
+    expect(standingsPoints(higherWinTotal, { winPoints: 1, tiePoints: 0.5 })).toBeGreaterThan(
+      standingsPoints(betterPct, { winPoints: 1, tiePoints: 0.5 })
     );
+  });
+
+  it("uses standings points after equal winning percentage", () => {
+    const shortUndefeated = {
+      ...emptyTeam({ id: "A", name: "1-0 Team" }),
+      w: 1,
+      l: 0,
+      games: 1,
+      pct: 1,
+    };
+    const longerUndefeated = {
+      ...emptyTeam({ id: "B", name: "10-0 Team" }),
+      w: 10,
+      l: 0,
+      games: 10,
+      pct: 1,
+    };
+
+    const ranked = rankTeams([shortUndefeated, longerUndefeated], {
+      winPoints: 1,
+      tiePoints: 0.5,
+    });
+
+    expect(ranked.map((team) => team.id)).toEqual(["B", "A"]);
   });
 
   it("skips run-diff tier when disabled", () => {
