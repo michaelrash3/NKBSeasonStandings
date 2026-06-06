@@ -165,7 +165,7 @@ describe("standingsPoints + rankTeams", () => {
     expect(standingsPoints(team, { winPoints: 3, tiePoints: 1 })).toBe(14);
   });
 
-  it("ranks GameChanger-style standings points before winning percentage", () => {
+  it("ranks GameChanger-style winning percentage with ties as half a win", () => {
     const higherWinTotal = {
       ...emptyTeam({ id: "A", name: "10-4 Team" }),
       w: 10,
@@ -175,7 +175,7 @@ describe("standingsPoints + rankTeams", () => {
       pct: 10 / 14,
       tpi: 1,
     };
-    const tieHeavy = {
+    const betterPct = {
       ...emptyTeam({ id: "B", name: "8-2-3 Team" }),
       w: 8,
       l: 2,
@@ -185,38 +185,37 @@ describe("standingsPoints + rankTeams", () => {
       tpi: 0,
     };
 
-    const ranked = rankTeams([higherWinTotal, tieHeavy], { winPoints: 1, tiePoints: 1 });
+    const ranked = rankTeams([higherWinTotal, betterPct], { winPoints: 1, tiePoints: 0.5 });
 
     expect(ranked.map((team) => team.id)).toEqual(["B", "A"]);
-    expect(standingsPoints(tieHeavy, { winPoints: 1, tiePoints: 1 })).toBeGreaterThan(
-      standingsPoints(higherWinTotal, { winPoints: 1, tiePoints: 1 })
+    expect(betterPct.pct).toBeGreaterThan(higherWinTotal.pct);
+    expect(standingsPoints(higherWinTotal, { winPoints: 1, tiePoints: 0.5 })).toBeGreaterThan(
+      standingsPoints(betterPct, { winPoints: 1, tiePoints: 0.5 })
     );
   });
 
-  it("uses winning percentage after equal standings points", () => {
-    const chaos = {
-      ...emptyTeam({ id: "A", name: "10-2-1 Team" }),
+  it("uses standings points after equal winning percentage", () => {
+    const shortUndefeated = {
+      ...emptyTeam({ id: "A", name: "1-0 Team" }),
+      w: 1,
+      l: 0,
+      games: 1,
+      pct: 1,
+    };
+    const longerUndefeated = {
+      ...emptyTeam({ id: "B", name: "10-0 Team" }),
       w: 10,
-      l: 2,
-      t: 1,
-      games: 13,
-      pct: (10 + 1 * 0.5) / 13,
-    };
-    const trashPandas = {
-      ...emptyTeam({ id: "B", name: "8-2-3 Team" }),
-      w: 8,
-      l: 2,
-      t: 3,
-      games: 13,
-      pct: (8 + 3 * 0.5) / 13,
+      l: 0,
+      games: 10,
+      pct: 1,
     };
 
-    const ranked = rankTeams([trashPandas, chaos], { winPoints: 1, tiePoints: 1 });
+    const ranked = rankTeams([shortUndefeated, longerUndefeated], {
+      winPoints: 1,
+      tiePoints: 0.5,
+    });
 
-    expect(standingsPoints(chaos, { winPoints: 1, tiePoints: 1 })).toBe(
-      standingsPoints(trashPandas, { winPoints: 1, tiePoints: 1 })
-    );
-    expect(ranked.map((team) => team.id)).toEqual(["A", "B"]);
+    expect(ranked.map((team) => team.id)).toEqual(["B", "A"]);
   });
 
   it("skips run-diff tier when disabled", () => {

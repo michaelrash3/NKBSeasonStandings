@@ -178,13 +178,15 @@ export const rankTeams = (teams: Team[], options: RankOptions) => {
   const tiebreakerOrder = resolvedTiebreakerOrder(options);
   const pointsSettings = {
     winPoints: options.winPoints ?? 1,
-    tiePoints: options.tiePoints ?? 1,
+    tiePoints: options.tiePoints ?? 0.5,
   };
   const sorted = [...teams].sort((a, b) => {
+    // GameChanger's PCT column treats ties as half a win and sorts standings
+    // by that percentage before applying secondary tiebreakers.
+    if (Math.abs(b.pct - a.pct) > 0.0001) return b.pct - a.pct;
+
     const pointsDiff = standingsPoints(b, pointsSettings) - standingsPoints(a, pointsSettings);
     if (Math.abs(pointsDiff) > 0.0001) return pointsDiff;
-
-    if (Math.abs(b.pct - a.pct) > 0.0001) return b.pct - a.pct;
 
     for (const factor of tiebreakerOrder) {
       const diff = compareByTiebreaker(a, b, factor);
