@@ -1430,7 +1430,7 @@ function BracketGameCard({
   onToggleFinal,
 }: {
   game: BracketGameProjection;
-  onScoreChange: (gameId: string, field: keyof GameLog, value: string) => void;
+  onScoreChange: (gameId: string, field: keyof GameLog, value: string | boolean) => void;
   onToggleFinal: (gameId: string) => void;
 }) {
   const topWinner = !!game.top.team && game.winnerId === game.top.team.id;
@@ -4235,6 +4235,11 @@ This will replace current season data and save an undo snapshot.`,
               updateLog={updateLog}
               setMatchups={setMatchups}
               gameStatusClasses={gameStatusClasses}
+              seasonGamesFinalized={matchups.length > 0 && remainingGames.length === 0}
+              bracketProjection={bracketProjection}
+              silverBracketProjection={silverBracketProjection}
+              updateBracketLog={updateBracketLog}
+              toggleBracketFinal={toggleBracketFinal}
             />
           )}
         </main>
@@ -5885,6 +5890,11 @@ function GamesView({
   updateLog,
   setMatchups,
   gameStatusClasses,
+  seasonGamesFinalized,
+  bracketProjection,
+  silverBracketProjection,
+  updateBracketLog,
+  toggleBracketFinal,
 }: {
   teams: TeamBase[];
   matchups: Matchup[];
@@ -5916,6 +5926,11 @@ function GamesView({
   updateLog: (id: string, field: keyof GameLog, value: string | boolean) => void;
   setMatchups: React.Dispatch<React.SetStateAction<Matchup[]>>;
   gameStatusClasses: (s: string) => string;
+  seasonGamesFinalized: boolean;
+  bracketProjection: ReturnType<typeof buildBracketProjection>;
+  silverBracketProjection: ReturnType<typeof buildBracketProjection>;
+  updateBracketLog: (gameId: string, field: keyof GameLog, value: string | boolean) => void;
+  toggleBracketFinal: (gameId: string) => void;
 }) {
   const dateId = useId();
   const awayId = useId();
@@ -5947,6 +5962,40 @@ function GamesView({
     }
     return scoreboardGames;
   }, [quickFilter, scoreboardGames, logs, todayKey]);
+  const tournamentGames = useMemo(() => {
+    if (!seasonGamesFinalized || quickFilter === "today") return [];
+
+    const inSelectedTeamFilter = (game: BracketGameProjection) => {
+      if (scoreboardTeamFilter === "ALL") return true;
+      return (
+        game.matchup?.away === scoreboardTeamFilter || game.matchup?.home === scoreboardTeamFilter
+      );
+    };
+
+    return [
+      ...bracketProjection.rounds.flatMap((round) =>
+        round.map((game) => ({ game, bracketLabel: "Gold Bracket" }))
+      ),
+      ...silverBracketProjection.rounds.flatMap((round) =>
+        round.map((game) => ({ game, bracketLabel: "Silver Bracket" }))
+      ),
+    ]
+      .filter(({ game }) => game.matchup && inSelectedTeamFilter(game))
+      .filter(({ game }) => quickFilter !== "open" || !isFinal(game.log))
+      .sort(
+        (a, b) =>
+          a.game.roundIndex - b.game.roundIndex ||
+          a.bracketLabel.localeCompare(b.bracketLabel) ||
+          a.game.gameIndex - b.game.gameIndex
+      );
+  }, [
+    seasonGamesFinalized,
+    quickFilter,
+    scoreboardTeamFilter,
+    bracketProjection,
+    silverBracketProjection,
+  ]);
+
   const nextOpenGameId = useMemo(
     () => scoreboardGames.find((game) => !isFinal(logs[game.id]))?.id ?? null,
     [scoreboardGames, logs]
@@ -6074,11 +6123,13 @@ function GamesView({
         </div>
       </div>
 
-      {visibleGames.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm font-bold text-slate-500 dark:text-slate-400">
-          No games yet.
+      {visibleGames.length === 0 && tournamentGames.length === 0 ? (
+        <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+          {seasonGamesFinalized ? "No games match this filter." : "No games yet."}
         </div>
-      ) : (
+      ) : null}
+
+      {visibleGames.length > 0 && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {visibleGames.map((game) => {
             const log = logs[game.id] || EMPTY_GAME_LOG;
@@ -6226,6 +6277,126 @@ function GamesView({
               </article>
             );
           })}
+        </div>
+      )}
+
+      {tournamentGames.length > 0 && (
+        <div className="space-y-4">
+          <div className={`${card} p-4`}>
+            <div className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Tournament Schedule
+            </div>
+            <h3 className="mt-1 text-lg font-black text-slate-950 dark:text-slate-100">
+              Bracket games are ready for score entry
+            </h3>
+            <p className="mt-1 text-sm font-bold text-slate-500 dark:text-slate-400">
+              All regular-season games are finalized, so Gold and Silver tournament matchups now
+              appear here alongside the bracket predictor.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {tournamentGames.map(({ game, bracketLabel }) => {
+              const matchup = game.matchup;
+              if (!matchup) return null;
+              const away = teams.find((team) => team.id === matchup.away);
+              const home = teams.find((team) => team.id === matchup.home);
+              const final = isFinal(game.log);
+              const hasEnteredScore =
+                game.log.awayRuns.trim() !== "" && game.log.homeRuns.trim() !== "";
+              const pickPct =
+                game.prediction && game.predictedWinnerId
+                  ? game.predictedWinnerId === matchup.away
+                    ? game.prediction.awayWinPct
+                    : 1 - game.prediction.awayWinPct
+                  : null;
+              const winnerLabel =
+                game.winnerSource === "actual"
+                  ? "Actual winner"
+                  : game.winnerSource === "bye"
+                    ? "Bye advance"
+                    : game.winnerSource === "projected"
+                      ? "Model pick"
+                      : "Pending";
+
+              return (
+                <article
+                  key={game.id}
+                  className={`overflow-hidden rounded-3xl border bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900 ${
+                    final
+                      ? "border-slate-200 opacity-80 dark:border-slate-700"
+                      : "border-slate-200 dark:border-slate-700"
+                  }`}
+                >
+                  <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/50">
+                    <div>
+                      <div className="text-[10px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        {bracketLabel} · {game.roundName} · Game {game.gameIndex + 1}
+                      </div>
+                      <div className="mt-1 text-sm font-black text-slate-950 dark:text-slate-100">
+                        {winnerLabel}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleBracketFinal(game.id)}
+                      className={`rounded-lg px-3 py-1 text-xs font-black ${
+                        final ? "bg-emerald-600 text-white" : "bg-slate-950 text-white"
+                      }`}
+                      aria-label={
+                        final
+                          ? "Mark tournament game as scheduled"
+                          : "Mark tournament game as final"
+                      }
+                    >
+                      {final ? "Final" : "Scheduled"}
+                    </button>
+                  </div>
+                  <div className="space-y-4 p-4">
+                    {!final && game.prediction && pickPct !== null && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black dark:border-slate-700 dark:bg-slate-800/50">
+                        <span className="rounded-full bg-white px-3 py-1 text-slate-700 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700">
+                          Model score: {game.prediction.awayScore}-{game.prediction.homeScore}
+                        </span>
+                        <span className="text-slate-500 dark:text-slate-400">
+                          Bracket pick · {Math.round(pickPct * 100)}%
+                        </span>
+                      </div>
+                    )}
+                    <ScoreRow
+                      teamName={away?.name || matchup.away}
+                      prefix="away"
+                      log={game.log}
+                      onChange={(field, value) => updateBracketLog(game.id, field, value)}
+                    />
+                    <ScoreRow
+                      teamName={home?.name || matchup.home}
+                      prefix="home"
+                      log={game.log}
+                      onChange={(field, value) => updateBracketLog(game.id, field, value)}
+                    />
+                    <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-sm font-bold text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                      <span>
+                        {final
+                          ? `Final · ${bracketLabel}`
+                          : hasEnteredScore
+                            ? "Scores entered — verify final"
+                            : `${game.roundName} score entry`}
+                      </span>
+                      {!final && (
+                        <button
+                          type="button"
+                          onClick={() => toggleBracketFinal(game.id)}
+                          className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black text-white"
+                        >
+                          {hasEnteredScore ? "Verify Final" : "Save + Final"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         </div>
       )}
     </section>
