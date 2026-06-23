@@ -30,6 +30,27 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+
+@layer utilities {
+  .cardless-ui :is(section, article, aside, div):not([role="tablist"]) {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    --tw-ring-color: transparent !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-shadow: 0 0 #0000 !important;
+    --tw-shadow-colored: 0 0 #0000 !important;
+    backdrop-filter: none !important;
+  }
+
+  .cardless-ui :is(section, article, aside, div):not([role="tablist"]) > :is(div, header, footer) {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+  }
+}
+
 @layer utilities {
   .stadium-grid {
     background:

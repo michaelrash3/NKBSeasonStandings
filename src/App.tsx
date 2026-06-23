@@ -336,7 +336,7 @@ function HeaderStatCard({
   accent: string;
 }) {
   return (
-    <div className="group relative overflow-hidden rounded-none border border-slate-200 bg-white p-4 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/70 dark:border-slate-800 dark:bg-slate-950 dark:hover:shadow-black/20">
+    <div className="group relative overflow-hidden rounded-none border border-transparent bg-transparent p-4 shadow-none transition duration-300 hover:-translate-y-0.5 dark:border-transparent">
       <div className={`absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r ${accent} opacity-90`} />
       <div className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
         {label}
@@ -4187,7 +4187,13 @@ This will replace current season data and save an undo snapshot.`,
           browser.
         </div>
       )}
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.16),transparent_34rem),linear-gradient(180deg,#f8fafc_0%,#e2e8f0_46%,#f8fafc_100%)] text-slate-950 dark:bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.18),transparent_32rem),linear-gradient(180deg,#020617_0%,#0f172a_50%,#020617_100%)] dark:text-slate-100">
+      <div className="cardless-ui relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.16),transparent_34rem),linear-gradient(180deg,#f8fafc_0%,#e2e8f0_46%,#f8fafc_100%)] text-slate-950 dark:bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.18),transparent_32rem),linear-gradient(180deg,#020617_0%,#0f172a_50%,#020617_100%)] dark:text-slate-100">
+        <img
+          src="/icon.svg"
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none fixed left-1/2 top-1/2 z-0 h-[min(92vw,58rem)] w-[min(92vw,58rem)] -translate-x-1/2 -translate-y-1/2 opacity-[0.045] mix-blend-multiply dark:opacity-[0.07] dark:mix-blend-screen"
+        />
         <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 shadow-lg shadow-slate-200/50 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-950/78 dark:shadow-black/25">
           <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -4296,7 +4302,7 @@ This will replace current season data and save an undo snapshot.`,
         </header>
 
         <main
-          className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8"
+          className="relative z-10 mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8"
           id={`panel-${activeView}`}
           role="tabpanel"
           aria-labelledby={`tab-${activeView}`}
