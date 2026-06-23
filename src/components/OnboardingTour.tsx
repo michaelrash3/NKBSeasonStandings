@@ -4,7 +4,7 @@ const STORAGE_KEY = "nkb_onboarded_v1";
 
 const STEPS = [
   {
-    title: "Welcome to the NKB Season Tracker",
+    title: "Welcome to League Forecast",
   },
   {
     title: "Start a season",

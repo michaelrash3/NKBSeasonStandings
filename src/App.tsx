@@ -248,22 +248,21 @@ function DesignFlowPanel({
 }) {
   return (
     <section className={`${card} overflow-hidden`} aria-label={title}>
-      <div className="relative isolate overflow-hidden bg-slate-950 px-6 py-6 text-white dark:bg-slate-950">
-        <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.35),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(37,99,235,0.3),_transparent_38%)]" />
-        <div className="text-xs font-black uppercase tracking-[0.28em] text-amber-200">
-          League design flow
+      <div className="border-b border-slate-200 bg-white px-6 py-5 dark:border-slate-800 dark:bg-slate-950">
+        <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
+          Launch checklist
         </div>
-        <h2 className="mt-2 text-2xl font-black tracking-tight text-white">{title}</h2>
-        <p className="mt-2 max-w-3xl text-sm font-bold leading-6 text-slate-200">{subtitle}</p>
+        <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 dark:text-white">{title}</h2>
+        <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600 dark:text-slate-300">{subtitle}</p>
       </div>
-      <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
         {steps.map((step, index) => (
           <article
             key={step.title}
-            className={`rounded-3xl bg-gradient-to-br ${flowToneClasses[step.tone]} p-4 ring-1`}
+            className={`rounded-2xl bg-gradient-to-br ${flowToneClasses[step.tone]} p-4 ring-1`}
           >
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-sm font-black text-slate-950 shadow-sm ring-1 ring-white/70 dark:bg-slate-950 dark:text-white dark:ring-white/10">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-sm font-black text-slate-950 shadow-sm ring-1 ring-white/70 dark:bg-slate-950 dark:text-white dark:ring-white/10">
                 {index + 1}
               </div>
               <div>
@@ -278,7 +277,7 @@ function DesignFlowPanel({
             <p className="mt-4 text-sm font-bold leading-6 text-slate-600 dark:text-slate-300">
               {step.body}
             </p>
-            <div className="mt-4 rounded-2xl bg-white/75 px-3 py-2 text-xs font-black uppercase tracking-wide text-slate-600 ring-1 ring-white/80 dark:bg-slate-950/55 dark:text-slate-300 dark:ring-white/10">
+            <div className="mt-4 rounded-xl bg-white/75 px-3 py-2 text-xs font-black uppercase tracking-wide text-slate-600 ring-1 ring-white/80 dark:bg-slate-950/55 dark:text-slate-300 dark:ring-white/10">
               {step.meta}
             </div>
             {step.actions && step.actions.length > 0 && (
@@ -332,17 +331,14 @@ function HeaderStatCard({
   accent: string;
 }) {
   return (
-    <div className="group relative overflow-hidden rounded-3xl border border-white/15 bg-white/10 p-4 shadow-xl shadow-black/10 backdrop-blur-xl transition duration-300 hover:-translate-y-0.5 hover:bg-white/15">
-      <div
-        className={`absolute inset-x-4 top-0 h-1 rounded-full bg-gradient-to-r ${accent} opacity-80`}
-      />
-      <div className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-300">
+    <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/70 dark:border-slate-800 dark:bg-slate-950 dark:hover:shadow-black/20">
+      <div className={`absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r ${accent} opacity-90`} />
+      <div className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
         {label}
       </div>
-      <div className="mt-2 break-words text-xl font-black leading-tight tracking-tight text-white sm:text-2xl">
+      <div className="mt-2 break-words text-xl font-black leading-tight tracking-tight text-slate-950 dark:text-white sm:text-2xl">
         {value}
       </div>
-      <div className="absolute -right-7 -top-7 h-20 w-20 rounded-full bg-white/10 blur-2xl transition duration-300 group-hover:bg-white/20" />
     </div>
   );
 }
@@ -4169,38 +4165,31 @@ This will replace current season data and save an undo snapshot.`,
           browser.
         </div>
       )}
-      <div className="min-h-screen bg-[radial-gradient(circle_at_12%_8%,_rgba(245,158,11,0.18),_transparent_28%),radial-gradient(circle_at_88%_2%,_rgba(37,99,235,0.18),_transparent_30%),linear-gradient(180deg,_#f8fafc_0%,_#e2e8f0_58%,_#cbd5e1_100%)] text-slate-950 dark:bg-[radial-gradient(circle_at_12%_8%,_rgba(245,158,11,0.18),_transparent_30%),radial-gradient(circle_at_86%_4%,_rgba(37,99,235,0.26),_transparent_34%),linear-gradient(180deg,_#020617_0%,_#0f172a_62%,_#111827_100%)] dark:text-slate-100">
-        <header className="relative isolate overflow-hidden border-b border-white/10 bg-[linear-gradient(120deg,#020617_0%,#0b1f4d_42%,#2d3368_64%,#9a3f06_100%)] text-white shadow-2xl shadow-slate-950/20">
-          <div className="stadium-grid absolute inset-0 -z-20 opacity-80" />
-          <div className="hero-orb absolute -left-24 top-8 -z-10 h-72 w-72 rounded-full bg-blue-500/30 blur-3xl" />
-          <div className="hero-orb hero-orb-delay absolute -right-20 top-0 -z-10 h-80 w-80 rounded-full bg-amber-400/25 blur-3xl" />
-          <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_22%_18%,rgba(59,130,246,0.42),transparent_34%),radial-gradient(circle_at_82%_10%,rgba(245,158,11,0.32),transparent_32%),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[length:auto,auto,18px_18px]" />
-          <div className="absolute inset-x-0 bottom-0 -z-10 h-28 bg-gradient-to-t from-black/30 to-transparent" />
-          <div
-            className="absolute right-8 top-28 hidden h-28 w-28 rotate-12 rounded-full border-4 border-white/20 bg-white/10 shadow-2xl shadow-black/20 before:absolute before:inset-y-3 before:left-1/2 before:w-1 before:-translate-x-1/2 before:rounded-full before:bg-red-300/70 after:absolute after:inset-x-3 after:top-1/2 after:h-1 after:-translate-y-1/2 after:rounded-full after:bg-red-300/70 lg:block"
-            aria-hidden="true"
-          />
-          <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-7 sm:px-6 sm:py-9 lg:px-8">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-              <div className="max-w-3xl">
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.34em] text-amber-200 ring-1 ring-white/15 backdrop-blur">
-                  <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.9)]" />
-                  League Command Center
+      <div className="min-h-screen bg-slate-100 text-slate-950 dark:bg-slate-950 dark:text-slate-100">
+        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 shadow-sm shadow-slate-200/60 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-black/20">
+          <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-sm font-black text-white shadow-lg shadow-slate-300/60 dark:bg-white dark:text-slate-950 dark:shadow-black/30">
+                  LF
                 </div>
-                <h1 className="mt-5 text-5xl font-black tracking-[-0.06em] text-white drop-shadow-sm sm:text-7xl">
-                  NKB Season Tracker
-                </h1>
-                <div className="mt-5 flex flex-wrap gap-2">
-                  <div className="inline-flex rounded-full bg-white/10 px-4 py-2 text-sm font-black uppercase tracking-wide text-amber-100 ring-1 ring-white/15 shadow-inner shadow-white/5 backdrop-blur">
-                    {settings.seasonLabel}
+                <div>
+                  <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
+                    Prediction command center
                   </div>
+                  <h1 className="text-2xl font-black tracking-[-0.04em] text-slate-950 dark:text-white sm:text-3xl">
+                    League Forecast
+                  </h1>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black uppercase tracking-wide text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
+                  {settings.seasonLabel}
+                </div>
                 <button
                   type="button"
                   onClick={() => setShowCommandPalette(true)}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-black text-white shadow-sm shadow-black/10 backdrop-blur hover:bg-white/15"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
                   aria-label="Open command palette"
                 >
                   <span>⌘K</span>
@@ -4210,7 +4199,7 @@ This will replace current season data and save an undo snapshot.`,
                   <button
                     type="button"
                     onClick={shareSeason}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-black text-white shadow-sm shadow-black/10 backdrop-blur hover:bg-white/15"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
                     aria-label="Copy share URL for this season"
                   >
                     Share
@@ -4230,7 +4219,7 @@ This will replace current season data and save an undo snapshot.`,
                 <button
                   type="button"
                   onClick={toggleTheme}
-                  className="inline-flex items-center justify-center rounded-2xl border border-white/15 bg-white/10 p-3 text-sm font-black text-white shadow-sm shadow-black/10 backdrop-blur hover:bg-white/15"
+                  className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white p-3 text-sm font-black text-slate-800 shadow-sm hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
                   aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
                   title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
                 >
@@ -4241,26 +4230,26 @@ This will replace current season data and save an undo snapshot.`,
 
             <div className="grid gap-3 md:grid-cols-3" aria-label="League pulse summary">
               <HeaderStatCard
-                label="Games"
+                label="Games analyzed"
                 value={`${finalCount}/${totalGamesCount}`}
-                accent="from-emerald-300 via-cyan-300 to-blue-400"
+                accent="from-emerald-400 via-cyan-400 to-blue-500"
               />
               <HeaderStatCard
-                label="Leader"
+                label="Top rated"
                 value={currentLeader ? currentLeader.name : "—"}
-                accent="from-amber-200 via-orange-300 to-red-400"
+                accent="from-blue-500 via-indigo-500 to-slate-900"
               />
               <HeaderStatCard
-                label="Gold"
+                label="Forecast field"
                 value={`Top ${goldCutoff}`}
-                accent="from-fuchsia-300 via-red-300 to-amber-300"
+                accent="from-amber-400 via-orange-500 to-red-500"
               />
             </div>
 
             <div
               role="tablist"
               aria-label="Main views"
-              className="-mx-2 flex gap-1 overflow-x-auto rounded-[1.75rem] bg-white/10 p-1.5 ring-1 ring-white/15 shadow-inner shadow-white/5 backdrop-blur sm:mx-0 sm:gap-2 sm:overflow-visible"
+              className="flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-1 shadow-inner dark:border-slate-800 dark:bg-slate-900"
             >
               {VIEW_ORDER.map((view) => (
                 <button
