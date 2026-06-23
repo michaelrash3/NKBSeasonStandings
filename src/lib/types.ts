@@ -122,11 +122,13 @@ export type Settings = {
   goldCutoff: number;
   seasonLabel: string;
   regularSeasonGamesPerTeam: number;
+  defaultGameInnings: number;
   winPoints: number;
   tiePoints: number;
   runDiffTiebreaker: boolean;
   tiebreakerOrder: TiebreakerFactor[];
   maxScoreCap: number;
+  maxRunDifferential: number;
   modelAggression: ModelAggression;
   pitchMode: PitchMode;
   recapGrouping: RecapGrouping;
@@ -163,11 +165,13 @@ export const DEFAULT_SETTINGS: Settings = {
   goldCutoff: DEFAULT_GOLD_CUTOFF,
   seasonLabel: DEFAULT_SEASON_LABEL,
   regularSeasonGamesPerTeam: 0,
+  defaultGameInnings: 6,
   winPoints: 1,
   tiePoints: 0.5,
   runDiffTiebreaker: true,
   tiebreakerOrder: DEFAULT_TIEBREAKER_ORDER,
   maxScoreCap: RUN_SCORE_CAP,
+  maxRunDifferential: RUN_SCORE_CAP,
   modelAggression: "Balanced",
   pitchMode: "machine",
   recapGrouping: "date",

@@ -10,7 +10,7 @@ export const parseNumber = (value: string, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-export const blankLog = (): GameLog => ({
+export const blankLog = (innings = "6"): GameLog => ({
   awayRuns: "",
   awayHits: "",
   awayK: "",
@@ -21,6 +21,6 @@ export const blankLog = (): GameLog => ({
   homeErrors: "",
   awayWalksAllowed: "",
   homeWalksAllowed: "",
-  innings: "6",
+  innings,
   isFinal: false,
 });

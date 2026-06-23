@@ -208,6 +208,9 @@ export const coerceSettings = (raw: unknown): Settings => {
     regularSeasonGamesPerTeam: isNumber(raw.regularSeasonGamesPerTeam)
       ? Math.min(200, Math.max(0, Math.round(raw.regularSeasonGamesPerTeam)))
       : DEFAULT_SETTINGS.regularSeasonGamesPerTeam,
+    defaultGameInnings: isNumber(raw.defaultGameInnings)
+      ? Math.min(10, Math.max(1, Math.round(raw.defaultGameInnings)))
+      : DEFAULT_SETTINGS.defaultGameInnings,
     winPoints: isNumber(raw.winPoints)
       ? Math.min(10, Math.max(0, raw.winPoints))
       : DEFAULT_SETTINGS.winPoints,
@@ -217,6 +220,9 @@ export const coerceSettings = (raw: unknown): Settings => {
     runDiffTiebreaker,
     tiebreakerOrder: coerceTiebreakerOrder(raw.tiebreakerOrder, runDiffTiebreaker),
     maxScoreCap: RUN_SCORE_CAP,
+    maxRunDifferential: isNumber(raw.maxRunDifferential)
+      ? Math.min(RUN_SCORE_CAP, Math.max(0, Math.round(raw.maxRunDifferential)))
+      : DEFAULT_SETTINGS.maxRunDifferential,
     modelAggression,
     pitchMode,
     recapGrouping,

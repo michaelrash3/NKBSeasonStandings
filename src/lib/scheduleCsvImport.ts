@@ -31,13 +31,15 @@ export const parseScheduleCsvImport = (raw: string): ScheduleCsvImportResult => 
   const firstIndex = (...names: string[]) => names.map(index).find((i) => i >= 0) ?? -1;
   const awayKIndex = index("Away K");
   const awayErrorsIndex = firstIndex("Away E", "Away Errors");
-  const awayWalksAllowedIndex = firstIndex("Away BB", "Away BB Allowed");
+  const awayBbIndex = index("Away BB");
+  const awayWalksAllowedIndex = firstIndex("Away BB Allowed");
   const homeTeamIndex = index("Home Team");
   const homeRunsIndex = index("Home Runs");
   const homeHitsIndex = index("Home Hits");
   const homeKIndex = index("Home K");
   const homeErrorsIndex = firstIndex("Home E", "Home Errors");
-  const homeWalksAllowedIndex = firstIndex("Home BB", "Home BB Allowed");
+  const homeBbIndex = index("Home BB");
+  const homeWalksAllowedIndex = firstIndex("Home BB Allowed");
 
   if (gameIdIndex < 0 || dateIndex < 0 || awayTeamIndex < 0 || homeTeamIndex < 0) {
     throw new Error("Missing required columns");
@@ -100,8 +102,14 @@ export const parseScheduleCsvImport = (raw: string): ScheduleCsvImportResult => 
     const homeK = homeKIndex >= 0 ? (row[homeKIndex]?.trim() ?? "") : "";
     const awayErrors = awayErrorsIndex >= 0 ? (row[awayErrorsIndex]?.trim() ?? "") : "";
     const homeErrors = homeErrorsIndex >= 0 ? (row[homeErrorsIndex]?.trim() ?? "") : "";
-    const awayWalksAllowed = awayWalksAllowedIndex >= 0 ? (row[awayWalksAllowedIndex]?.trim() ?? "") : "";
-    const homeWalksAllowed = homeWalksAllowedIndex >= 0 ? (row[homeWalksAllowedIndex]?.trim() ?? "") : "";
+    const awayBb = awayBbIndex >= 0 ? (row[awayBbIndex]?.trim() ?? "") : "";
+    const homeBb = homeBbIndex >= 0 ? (row[homeBbIndex]?.trim() ?? "") : "";
+    const explicitAwayWalksAllowed =
+      awayWalksAllowedIndex >= 0 ? (row[awayWalksAllowedIndex]?.trim() ?? "") : "";
+    const explicitHomeWalksAllowed =
+      homeWalksAllowedIndex >= 0 ? (row[homeWalksAllowedIndex]?.trim() ?? "") : "";
+    const awayWalksAllowed = explicitAwayWalksAllowed || homeBb;
+    const homeWalksAllowed = explicitHomeWalksAllowed || awayBb;
 
     matchups.push({
       id,
