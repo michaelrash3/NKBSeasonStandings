@@ -128,6 +128,7 @@ export type Settings = {
   runDiffTiebreaker: boolean;
   tiebreakerOrder: TiebreakerFactor[];
   maxScoreCap: number;
+  maxRunDifferential: number;
   modelAggression: ModelAggression;
   pitchMode: PitchMode;
   recapGrouping: RecapGrouping;
@@ -170,6 +171,7 @@ export const DEFAULT_SETTINGS: Settings = {
   runDiffTiebreaker: true,
   tiebreakerOrder: DEFAULT_TIEBREAKER_ORDER,
   maxScoreCap: RUN_SCORE_CAP,
+  maxRunDifferential: RUN_SCORE_CAP,
   modelAggression: "Balanced",
   pitchMode: "machine",
   recapGrouping: "date",

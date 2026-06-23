@@ -2058,8 +2058,8 @@ export default function App() {
   // ---------- Derived state ----------
 
   const liveTeams = useMemo(
-    () => calculateTeams(teams, matchups, deferredLogs),
-    [teams, matchups, deferredLogs]
+    () => calculateTeams(teams, matchups, deferredLogs, settings),
+    [teams, matchups, deferredLogs, settings]
   );
   const liveById = useMemo(() => {
     const map = new Map<string, Team>();
@@ -2165,7 +2165,7 @@ export default function App() {
     const built: { teams: Team[]; remaining: Matchup[]; seedText: string }[] = [];
     for (let index = 1; index <= states.length; index += 1) {
       const stateLogs = buildLogsUntil(index);
-      const stateTeams = calculateTeams(teams, matchups, stateLogs);
+      const stateTeams = calculateTeams(teams, matchups, stateLogs, settings);
       const stateRemaining = matchups.filter((g) => !isFinal(stateLogs[g.id]));
       const seedText = simulationSeed(
         matchups,
@@ -3095,7 +3095,7 @@ export default function App() {
   // ---------- Snapshots / undo ----------
 
   const buildRankSnapshot = (nextLogs: Record<string, GameLog>): RankSnapshotEntry[] => {
-    const nextLive = calculateTeams(teams, matchups, nextLogs);
+    const nextLive = calculateTeams(teams, matchups, nextLogs, settings);
     const nextRanked = rankTeams(nextLive, rankOptionsFromSettings(settings));
     const nextRemaining = matchups.filter((game) => !isFinal(nextLogs[game.id]));
     const nextRemainingCounts = getRemainingCounts(nextLive, nextRemaining);
@@ -5803,6 +5803,7 @@ function SettingsView({
   const tieId = useId();
   const regularSeasonGamesId = useId();
   const defaultInningsId = useId();
+  const maxRunDifferentialId = useId();
   const pitchModeId = useId();
   const aggrId = useId();
   const recapId = useId();
@@ -5923,6 +5924,30 @@ function SettingsView({
             </select>
             <p className="mt-2 text-xs font-bold text-slate-500 dark:text-slate-400">
               New games and blank round-robin schedules use this innings value by default.
+            </p>
+          </label>
+
+          <label htmlFor={maxRunDifferentialId} className="block">
+            <span className="text-sm font-black text-slate-700">Max Run Differential</span>
+            <select
+              id={maxRunDifferentialId}
+              value={settings.maxRunDifferential}
+              onChange={(event) =>
+                setSettings((prev) => ({
+                  ...prev,
+                  maxRunDifferential: Number(event.target.value),
+                }))
+              }
+              className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-950 outline-none focus:border-slate-950 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-white"
+            >
+              {[5, 10, 15, 20, 35].map((runs) => (
+                <option key={runs} value={runs}>
+                  {runs === 35 ? "No cap" : `${runs} runs`}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 text-xs font-bold text-slate-500 dark:text-slate-400">
+              Standings and projections cap each game&apos;s run-differential credit at this amount.
             </p>
           </label>
 

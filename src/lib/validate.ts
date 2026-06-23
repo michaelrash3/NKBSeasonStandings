@@ -220,6 +220,9 @@ export const coerceSettings = (raw: unknown): Settings => {
     runDiffTiebreaker,
     tiebreakerOrder: coerceTiebreakerOrder(raw.tiebreakerOrder, runDiffTiebreaker),
     maxScoreCap: RUN_SCORE_CAP,
+    maxRunDifferential: isNumber(raw.maxRunDifferential)
+      ? Math.min(RUN_SCORE_CAP, Math.max(0, Math.round(raw.maxRunDifferential)))
+      : DEFAULT_SETTINGS.maxRunDifferential,
     modelAggression,
     pitchMode,
     recapGrouping,

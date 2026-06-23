@@ -655,3 +655,15 @@ it("player-pitch predictions are affected by walks and errors", () => {
 
   expect(messyPrediction.awayWinPct).toBeLessThan(cleanPrediction.awayWinPct);
 });
+
+it("caps per-game run differential when configured", () => {
+  const capped = calculateTeams(
+    teams,
+    [{ id: "cap-game", date: "5/1", away: "A", home: "B" }],
+    { "cap-game": finalLog({ awayRuns: "18", homeRuns: "2" }) },
+    { maxRunDifferential: 10 }
+  );
+
+  expect(capped.find((team) => team.id === "A")?.runDiff).toBe(10);
+  expect(capped.find((team) => team.id === "B")?.runDiff).toBe(-10);
+});

@@ -3,6 +3,7 @@ import { clamp, isFinal, parseNumber } from "./util";
 import {
   DEFAULT_TIEBREAKER_ORDER,
   MODEL_AGGRESSION,
+  RUN_SCORE_CAP,
   type GameLog,
   type Matchup,
   type Prediction,
@@ -265,10 +266,18 @@ type InternalTeam = Team & {
   results: { diff: number; oppId: string }[];
 };
 
+const cappedRunDiff = (runsFor: number, runsAgainst: number, maxRunDifferential = RUN_SCORE_CAP) => {
+  const cap = Math.max(0, Math.min(RUN_SCORE_CAP, Math.round(maxRunDifferential)));
+  const rawDiff = runsFor - runsAgainst;
+  if (cap <= 0) return rawDiff;
+  return clamp(rawDiff, -cap, cap);
+};
+
 export const calculateTeams = (
   teamBases: TeamBase[],
   matchups: Matchup[],
-  logs: Record<string, GameLog>
+  logs: Record<string, GameLog>,
+  settings: Pick<Settings, "maxRunDifferential"> = { maxRunDifferential: RUN_SCORE_CAP }
 ): Team[] => {
   const teams: InternalTeam[] = teamBases.map((base) => ({
     ...emptyTeam(base),
@@ -322,6 +331,8 @@ export const calculateTeams = (
       away.ra += homeRuns;
       home.rs += homeRuns;
       home.ra += awayRuns;
+      away.runDiff += cappedRunDiff(awayRuns, homeRuns, settings.maxRunDifferential);
+      home.runDiff += cappedRunDiff(homeRuns, awayRuns, settings.maxRunDifferential);
 
       away.awayKs += awayK;
       away.awayInns += innings;
@@ -368,7 +379,6 @@ export const calculateTeams = (
 
   teams.forEach((team) => {
     team.pct = team.games ? (team.w + team.t * 0.5) / team.games : 0;
-    team.runDiff = team.rs - team.ra;
     team.rsg = team.games ? team.rs / team.games : 0;
     team.rag = team.games ? team.ra / team.games : 0;
     team.hpg = team.games ? team.battingHits / team.games : 0;
@@ -733,6 +743,8 @@ export const applyResult = (
   away.ra += homeRuns;
   home.rs += homeRuns;
   home.ra += awayRuns;
+  away.runDiff += cappedRunDiff(awayRuns, homeRuns, settings.maxRunDifferential);
+  home.runDiff += cappedRunDiff(homeRuns, awayRuns, settings.maxRunDifferential);
 
   addHeadToHeadResult(away, home.id, awayRuns - homeRuns);
   addHeadToHeadResult(home, away.id, homeRuns - awayRuns);
@@ -747,7 +759,6 @@ export const applyResult = (
 
   [away, home].forEach((team) => {
     team.pct = team.games ? (team.w + team.t * 0.5) / team.games : 0;
-    team.runDiff = team.rs - team.ra;
     // Keep per-game production rates anchored to finalized games only. Projected
     // results can update standings and run-differential tiebreakers, but they
     // should not dilute displayed R/G, H/G, K/G, or opponent K/G with model-generated games.
